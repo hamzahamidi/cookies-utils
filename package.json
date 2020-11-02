@@ -1,10 +1,12 @@
 {
   "name": "cookies-utils",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "cookies-utils",
   "main": "cookies-utils.min.js",
+  "module": "cookies-utils.min.js",
   "scripts": {
-    "build": "webpack --mode=production",
+    "build": "webpack --config=webpack.prod.js",
+    "build:dev": "webpack --config=webpack.config.js",
     "coverage": "jest --collect-coverage",
     "test": "jest --watchAll"
   },
@@ -41,7 +43,8 @@
     "ts-loader": "^8.0.7",
     "typescript": "^4.0.5",
     "webpack": "^5.3.2",
-    "webpack-cli": "^4.1.0"
+    "webpack-cli": "^4.1.0",
+    "webpack-merge": "^5.3.0"
   },
   "typings": "index.d.ts"
 }

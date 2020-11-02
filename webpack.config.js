@@ -6,6 +6,7 @@ const CopyPlugin = require('copy-webpack-plugin');
 module.exports = {
   mode: 'development',
   entry: './src/index.ts',
+  devtool: 'source-map',
   plugins: [
     new CleanWebpackPlugin(),
     new webpack.ProgressPlugin(),
@@ -19,7 +20,9 @@ module.exports = {
   ],
   output: {
     filename: 'cookies-utils.min.js',
-    path: path.resolve(__dirname, 'dist')
+    path: path.resolve(__dirname, 'dist'),
+    library: 'cookiesUtils',
+    libraryTarget: 'umd'
   },
   module: {
     rules: [

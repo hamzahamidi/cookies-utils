@@ -1,23 +1,19 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "module": "commonjs",
+    "allowSyntheticDefaultImports": true,
     "sourceMap": true,
-    "strict": false,
-    "noImplicitAny": false,
-    "strictPropertyInitialization": false,
-    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "module": "es6",
+    "target": "es5",
+    "outDir": "./dist",
+    "allowJs": true,
     "declaration": true,
-    "types": ["jest"]
+    "declarationDir": "./dist"
   },
   "include": [
     "src/*"
   ],
   "exclude": [
-    "src/*.spec.ts",
-    "node_modules",
-    "./node_modules",
-    "./node_modules/*",
-    "./node_modules/@types/node/index.d.ts",
+    "**/*.spec.ts"
   ]
 }

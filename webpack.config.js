@@ -12,7 +12,6 @@ module.exports = {
     new CopyPlugin({
       patterns: [
         { from: 'src', to: 'src' },
-        { from: 'src/index.d.ts' },
         { from: 'package.json' },
         { from: 'README.md' }
       ],

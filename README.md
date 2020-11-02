@@ -9,10 +9,57 @@
     </a>
 </p>
 
-This project contains functions to help manage cookies. Install the library with `npm install cookies-utils`.
+This project contains functions to help manage cookies.
 
-1- Check existence of cookie `function cookieExists(name: string): boolean`
+## Installation
 
-2- Delete a cookie `deleteCookie(name: string, path?: string, domain?: string): void`
+### NPM
 
-3- Check if cookie has specific value `function cookieHasValue(name: string, value: string): boolean`
+Install the library with `npm install cookies-utils`.
+
+### CDN
+
+Or use it directly in your browser via jsDelivr or unpkg:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/cookies-utils/cookies-utils.min.js"></script>
+...
+
+cookiesUtils.deleteCookie('name')
+```
+
+or
+
+```html
+<script src="https://unpkg.com/cookies-utils/cookies-utils.min.js"></script>
+
+...
+
+cookiesUtils.deleteCookie('name')
+```
+
+## Usage
+
+Check existence of cookie
+
+```javascript
+import { cookieExists } from "cookies-utils";
+
+const isExist = cookieExists('name');
+```
+
+Delete a cookie
+
+```javascript
+import { deleteCookie } from "cookies-utils";
+
+deleteCookie('name');
+```
+
+Check if cookie has specific value
+
+```javascript
+import { cookieHasValue } from "cookies-utils";
+
+const hasValue = cookieHasValue('name','value');
+```

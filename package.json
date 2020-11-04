@@ -1,6 +1,6 @@
 {
   "name": "cookies-utils",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "cookies-utils",
   "main": "cookies-utils.min.js",
   "module": "cookies-utils.min.js",

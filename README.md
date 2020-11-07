@@ -26,7 +26,10 @@ Or use it directly in your browser via jsDelivr or unpkg:
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/cookies-utils/cookies-utils.min.js"></script>
-... cookiesUtils.deleteCookie('name')
+
+...
+
+cookiesUtils.deleteCookie('name')
 ```
 
 or
@@ -34,7 +37,9 @@ or
 ```html
 <script src="https://unpkg.com/cookies-utils/cookies-utils.min.js"></script>
 
-... cookiesUtils.deleteCookie('name')
+...
+
+cookiesUtils.deleteCookie('name')
 ```
 
 ## Usage

@@ -1,18 +1,22 @@
 {
   "name": "cookies-utils",
-  "version": "0.0.7",
-  "description": "cookies-utils",
+  "version": "0.0.0-development",
+  "description": "A JavaScript API for handling cookies",
   "main": "cookies-utils.min.js",
   "module": "cookies-utils.min.js",
   "scripts": {
     "build": "webpack --config=webpack.prod.js",
     "build:dev": "webpack --config=webpack.config.js",
     "coverage": "jest --collect-coverage",
-    "test": "jest --watchAll"
+    "test": "jest --watchAll",
+    "prepublishOnly": "cp ../CHANGELOG.md .",
+    "semantic-release": "semantic-release"
   },
   "keywords": [
     "cookie",
     "cookies",
+    "browser",
+    "umd",
     "utils",
     "cookies-utils",
     "set cookie",
@@ -21,7 +25,7 @@
     "cookie exists",
     "cookie has value"
   ],
-  "author": "hamza HAMIDI",
+  "author": "Hamza HAMIDI",
   "license": "MIT",
   "homepage": "https://github.com/hamzahamidi/cookies-utils",
   "repository": {
@@ -31,6 +35,8 @@
   "devDependencies": {
     "@babel/core": "^7.12.3",
     "@babel/preset-env": "^7.12.1",
+    "@semantic-release/changelog": "^5.0.1",
+    "@semantic-release/git": "^9.0.0",
     "@types/jest": "^26.0.15",
     "@typescript-eslint/eslint-plugin": "^4.6.0",
     "@typescript-eslint/parser": "^4.6.0",
@@ -42,6 +48,7 @@
     "copy-webpack-plugin": "^6.2.1",
     "eslint": "^7.12.1",
     "jest": "^26.6.1",
+    "semantic-release": "^17.2.2",
     "terser-webpack-plugin": "^5.0.3",
     "ts-jest": "^26.4.3",
     "ts-loader": "^8.0.7",

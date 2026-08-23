@@ -14,10 +14,42 @@ permissions:
   pull-requests: write
   id-token: write
 
+# Two jobs rather than one, because they need different gating. The dry run has
+# to stay ungated or every pull request would wait on a human to learn whether
+# its configuration parses. The publish is gated, because a push to main
+# publishes to npm irreversibly: unpublishing is limited to a 24 hour window
+# and only while nothing depends on the version.
 jobs:
+  dry-run:
+    name: Dry run
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run build
+      # semantic-release's own isPr guard returns before verifyConditions and
+      # before the branch check in .releaserc.json, so on a pull request it
+      # exits before it ever reaches npm authentication. This catches
+      # configuration and plugin errors only. It does not prove that OIDC
+      # publishing works.
+      - run: npx semantic-release --dry-run
+
   release:
     name: Release
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    # This name must exist as an environment with required reviewers under
+    # Settings, Environments. GitHub creates an unprotected environment on
+    # first use if it does not, which gates nothing at all.
+    environment: npm-publish
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,16 +63,6 @@ jobs:
       - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
-      # semantic-release's own isPr guard returns before verifyConditions and
-      # before the branch check in .releaserc.json, so on a pull request it
-      # exits before it ever reaches npm authentication. This step catches
-      # configuration and plugin errors only. It does not prove that OIDC
-      # publishing works.
-      - name: Dry run
-        if: github.event_name == 'pull_request'
-        run: npx semantic-release --dry-run
-      - name: Release
-        if: github.event_name == 'push'
-        env:
+      - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release

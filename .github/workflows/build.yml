@@ -36,7 +36,7 @@ jobs:
         # has no pull_request context at all, so the fork check treats a
         # missing value as "not a fork" rather than skipping main too.
         if: matrix.node-version == '22.x' && github.event.pull_request.head.repo.fork != true
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info

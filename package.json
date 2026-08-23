@@ -23,7 +23,8 @@
   },
   "sideEffects": false,
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "npm run build:types && rollup -c",
@@ -32,6 +33,7 @@
     "test:watch": "vitest",
     "test:browser": "vitest run --project browser",
     "coverage": "vitest run --project unit --coverage",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke": "node scripts/smoke-package.mjs",
     "semantic-release": "semantic-release"
   },
@@ -39,14 +41,14 @@
     "cookie",
     "cookies",
     "browser",
-    "umd",
     "utils",
     "cookies-utils",
+    "cookie store",
+    "cookiestore",
+    "document.cookie",
     "set cookie",
-    "delete cookie",
-    "delete all cookies",
-    "cookie exists",
-    "cookie has value"
+    "get cookie",
+    "delete cookie"
   ],
   "author": "Hamza HAMIDI",
   "license": "MIT",
@@ -61,13 +63,11 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/npm": "^13.1.2",
-    "@typescript-eslint/eslint-plugin": "^4.6.0",
-    "@typescript-eslint/parser": "^4.6.0",
+    "@types/node": "^20.0.0",
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitest/browser": "^4.1.11",
     "@vitest/browser-playwright": "^4.1.11",
     "@vitest/coverage-v8": "^4.1.11",
-    "eslint": "^7.12.1",
     "playwright": "^1.62.1",
     "rollup": "^4.62.5",
     "semantic-release": "^24.2.9",

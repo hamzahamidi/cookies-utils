@@ -66,12 +66,20 @@ import { get, set } from "cookies-utils";
 
 | Backend | Used when | Attributes readable |
 | --- | --- | --- |
-| Cookie Store API | `cookieStore` exists and the origin is https, or there is no `document` (a service worker) | yes, best effort |
+| Cookie Store API | `cookieStore` exists and the origin is https, or there is no `document` (a service worker) | Chromium: the full record (`path`, `domain`, `expires`, `secure`, `sameSite`, `partitioned`). Firefox and WebKit: name and value only, see below |
 | `document.cookie` | any non-https origin with a `document`, or wherever Cookie Store is unavailable | no, name and value only |
 
 The Cookie Store API reached Baseline in June 2025; caniuse reports it as
 supported from Safari 18.4 and Firefox 140. The library picks a backend per
 call, so no configuration is needed.
+
+`getAll()`'s attribute reporting is Chromium-only today, even though all
+three engines expose a native `CookieStore`. Firefox's and WebKit's own
+implementations report only `{ name, value }` from `get()` and `getAll()`,
+with no `path`, `domain`, `expires`, `secure` or `sameSite`. This was
+established by driving each backend directly in the real browser suite,
+against the Cookie Store objects Chromium, Firefox and WebKit each provide
+themselves, not by reading their documentation.
 
 One divergence cannot be removed. `CookieStore.set()` has no `secure` option
 because it only runs in secure contexts, so a cookie written through it is always
@@ -90,8 +98,9 @@ likely affected the same way rather than certainly so. The library therefore
 prefers `document.cookie` on any non-https origin regardless of which backend
 would otherwise be picked, so this is handled rather than merely disclosed,
 and production sites on https are unaffected either way. The real browser
-suite is served over https and runs on Chromium, Firefox and WebKit,
-exercising the Cookie Store backend on each engine that provides it.
+suite is served over https and runs on Chromium, Firefox and WebKit: all
+three ship a `CookieStore` today, all three exercise it in CI, and all three
+pass.
 
 ## Migrating from 1.0.0
 
@@ -111,6 +120,90 @@ equivalent. It compared the raw header text after trimming, so it matched percen
 encoded values and ignored surrounding whitespace. `await get(name)` returns the
 decoded value and compares exactly. That is a deliberate correction, not a
 like for like replacement.
+
+The rest of this section covers what the table above does not: a decoding
+trap almost every 1.0.0 call site hits, a list of inputs 1.0.0 tolerated that
+2.0.0 now rejects, and a reference for the options and error codes.
+
+### Delete your own decodeURIComponent call
+
+1.0.0's `setCookie` percent-encoded a value on write, and `getCookieValue`
+never decoded on read. Working 1.0.0 code very often reads:
+
+```javascript
+const value = decodeURIComponent(getCookieValue("session"));
+```
+
+`get()` in 2.0.0 already decodes the value it reads, leniently: a foreign
+cookie holding a lone `%` comes back unchanged rather than throwing. Carrying
+the same wrapper over now decodes twice:
+
+```javascript
+// Wrong after migrating: get() already decoded this once.
+const value = decodeURIComponent(await get("session"));
+```
+
+A value containing a literal percent sequence is mangled by the second
+decode, and a value ending in a lone `%` throws `URIError: URI malformed`,
+from your own wrapper rather than from this library. Delete the wrapper:
+
+```javascript
+const value = await get("session");
+```
+
+### Inputs 1.0.0 tolerated that 2.0.0 rejects
+
+`set()` throws `CookieError` instead of writing a cookie 1.0.0 would have
+written, for:
+
+- `maxAge` and `expires` supplied together
+- `sameSite: "none"` without `secure: true`
+- a `sameSite` value that is not exactly `"strict"`, `"lax"` or `"none"`,
+  for example the capitalized `"Lax"`
+- a `maxAge` that is not an integer
+- a `__Secure-` prefixed name without `secure: true`
+- a `__Host-` prefixed name without `secure: true`, with a `domain`, or
+  (only if you pass an explicit `path` other than `"/"`) with any other path;
+  `path` defaults to `"/"`, so `set("__Host-a", "b", { secure: true })`
+  already satisfies the path rule on its own
+- `partitioned: true` without `secure: true`
+- a `path` or `domain` containing a semicolon or a control character
+
+Anything your 1.0.0 code relied on being silently tolerated in this list now
+gets a rejection, before anything is written. See the error reference below
+for which `CookieErrorCode` each case throws.
+
+`get("")` and `has("")` changed too, on the read side. 1.0.0-equivalent code
+that looked up an empty name got back `undefined` or `false`. Both now reject
+with `INVALID_NAME`, along with every other empty or control-character name.
+
+### Options and error reference
+
+| Option | Type | Used by | Meaning |
+| --- | --- | --- | --- |
+| `path` | `string` | `set`, `delete` | Cookie path scope. Defaults to `"/"` when omitted, so a bare `set(name, value)` and a bare `delete(name)` target the same cookie. |
+| `domain` | `string` | `set`, `delete` | Cookie domain scope. No default. |
+| `expires` | `Date \| number` | `set` | Absolute expiry, as a `Date` or Unix time in milliseconds. Cannot be combined with `maxAge`. |
+| `maxAge` | `number` | `set` | Relative expiry in seconds. Zero or negative expires the cookie immediately. Must be an integer. Cannot be combined with `expires`. |
+| `secure` | `boolean` | `set` | Sends the cookie only over https. No default: the Cookie Store backend always writes a Secure cookie and rejects `secure: false` with `UNSUPPORTED`. |
+| `sameSite` | `"strict" \| "lax" \| "none"` | `set` | Cross-site sending policy, lowercase only. Defaults to `"lax"` when omitted. `"none"` requires `secure: true`. |
+| `partitioned` | `boolean` | `set`, `delete` | CHIPS partitioned storage. On `set()`, requires `secure: true`; `delete()` takes no `secure` option, so the requirement is not checked there. |
+
+`delete()` defaulting `path` to `"/"` means a bare `delete(name)` matches a
+bare `set(name, value)` without either call naming a path. A `path` or
+`domain` that does not match the cookie's own is still a silent no-op:
+deletion works by writing an already-expired cookie, and the browser only
+overwrites a cookie whose path and domain match. That still applies whenever
+`set()` used a non-default `path` or any `domain`, so a `delete()` for that
+cookie has to name the same ones.
+
+| `CookieErrorCode` | Thrown when |
+| --- | --- |
+| `INVALID_NAME` | the name is empty or contains a control character |
+| `INVALID_VALUE` | the value passed to `set()` is not a string |
+| `INVALID_OPTIONS` | attributes conflict: see "Inputs 1.0.0 tolerated" above for the `set()` cases, plus a non-finite `expires` (an invalid `Date`, or `Infinity`), and, on `delete()`, a `path` or `domain` with a semicolon or control character |
+| `UNSUPPORTED` | the selected backend cannot perform the request, for example `secure: false` on the Cookie Store backend |
+| `NO_COOKIE_ACCESS` | neither `cookieStore` nor `document` exists in this environment |
 
 `deleteAllCookies()` was removed rather than fixed. It could not read the path or
 domain of anything it found and could not see `HttpOnly` cookies, so it under

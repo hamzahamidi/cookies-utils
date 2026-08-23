@@ -1,19 +1,14 @@
 {
   "compilerOptions": {
-    "allowSyntheticDefaultImports": true,
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM"],
+    "strict": true,
     "sourceMap": true,
-    "noImplicitAny": true,
-    "module": "es6",
-    "target": "es5",
-    "outDir": "./dist",
-    "allowJs": true,
-    "declaration": true,
-    "declarationDir": "./dist"
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "**/*.spec.ts"
-  ]
+  "include": ["src/**/*", "vitest.config.mts"]
 }

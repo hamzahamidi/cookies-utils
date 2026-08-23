@@ -12,19 +12,49 @@
     </a>
 </p>
 
-This project contains functions to help manage cookies.
+A tiny, typed cookie API that uses the Cookie Store API when available and falls
+back safely to `document.cookie`.
+
+- One async API over both backends, chosen per call with nothing to configure
+- SSR-safe imports: importing never reads `document` or `cookieStore`
+- Normalized behaviour across backends: the same defaults and the same
+  validation either way, and the one divergence that cannot be removed is
+  documented rather than hidden
+- Validation for `SameSite`, `Secure`, `Partitioned` (CHIPS), the `__Secure-` and
+  `__Host-` prefixes, `Path`, `Domain`, `Expires` and `Max-Age`, including
+  combinations that are unsafe rather than merely wrong
+- Zero runtime dependencies, 1,987 bytes gzipped
+- ESM, CommonJS and TypeScript declarations, with tree-shakable named exports
+
+## Why cookies-utils?
+
+The Cookie Store API is the modern way to work with cookies: promise based,
+reachable from a service worker, and able to report a cookie's attributes rather
+than one flat string. What it is not is uniformly available or uniformly
+implemented.
+
+This package lets you write against those semantics once. It selects a backend
+per call, applies the same defaults to both, and where the two genuinely differ
+it raises a typed error instead of quietly doing something else. Every difference
+it accounts for is listed under [Browser support](#browser-support), including
+the ones it cannot remove.
 
 See [ROADMAP.md](ROADMAP.md) for where the library is heading.
 
+## Two backends, one API
+
+`get`, `getAll`, `has`, `set` and `delete` all return promises: the Cookie Store
+API offers no synchronous form, so neither does this. Defaults are applied once
+before either backend sees them, so both receive identical input: `path` defaults
+to `"/"` and `sameSite` to `"lax"`, which is why a bare `delete(name)` targets the
+same cookie a bare `set(name, value)` wrote. Where neither backend exists, such as
+during a server render, the import still succeeds and a call rejects with
+`CookieError` code `NO_COOKIE_ACCESS`.
+
 ## Installation
 
-### NPM
-
-Install the library with `npm install cookies-utils`.
-
-### CDN
-
-Or use it directly in your browser via jsDelivr or unpkg:
+Install from npm with `npm install cookies-utils`, or load the browser build from
+jsDelivr or unpkg for a `cookiesUtils` global:
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/cookies-utils/dist/cookies-utils.min.js"></script>
@@ -33,30 +63,24 @@ Or use it directly in your browser via jsDelivr or unpkg:
 </script>
 ```
 
-or
-
-```html
-<script src="https://unpkg.com/cookies-utils/dist/cookies-utils.min.js"></script>
-<script>
-  cookiesUtils.delete("name").then(() => console.log("gone"));
-</script>
-```
+Replace the host with `https://unpkg.com/cookies-utils/dist/cookies-utils.min.js`
+to serve the same file from unpkg.
 
 ## Usage
 
 ```javascript
 import { cookies } from "cookies-utils";
 
-await cookies.set("session", "abc", { secure: true, sameSite: "lax", path: "/" });
+await cookies.set("session", "abc", { secure: true, sameSite: "lax" });
 
 const value = await cookies.get("session"); // "abc" or undefined
 const exists = await cookies.has("session"); // boolean
 const all = await cookies.getAll(); // Cookie[]
 
-await cookies.delete("session", { path: "/" });
+await cookies.delete("session");
 ```
 
-Named imports work the same way and tree shake:
+Named imports behave the same way and tree shake:
 
 ```javascript
 import { get, set } from "cookies-utils";

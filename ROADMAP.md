@@ -1,9 +1,10 @@
 # cookies-utils roadmap
 
-## 2.0.0: Modern foundation
+## 2.0.0: Modern foundation (shipped)
 
-npm `latest` was already `1.0.0` before this rewrite began, so this milestone
-ships as `2.0.0`, not `v1.0` as earlier drafts of this roadmap called it. The
+Published to npm on 2026-08-23. npm `latest` was already `1.0.0` before this
+rewrite began, so this milestone shipped as `2.0.0`, not `v1.0` as earlier drafts
+of this roadmap called it. The
 Cookie Store milestone that used to follow it, and the Modern cookie features
 milestone that used to follow that, are folded in here too, since all three
 ship together.
@@ -151,8 +152,9 @@ Keep the project intentionally small.
 
 ## Positioning
 
-The package should become:
-
 A tiny, typed cookie API that uses the Cookie Store API when available and falls back safely to `document.cookie`.
 
-That is a much stronger proposition than just being another `document.cookie` wrapper.
+The differentiator is not easier ergonomics over `document.cookie`. It is that a
+consumer gets modern Cookie Store semantics without handling its availability,
+the differences between implementations, or the legacy fallback themselves. The
+same wording is used in `package.json` and at the top of `README.md`.

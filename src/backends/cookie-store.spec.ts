@@ -67,6 +67,12 @@ describe('Cookie Store backend', () => {
     expect(await backend.get('a')).toEqual({ name: 'a', value: '1' });
   });
 
+  it('drops a null expires, which a session cookie reports', async () => {
+    const store = new FakeCookieStore([{ name: 'a', value: '1', expires: null }]);
+    const backend = createCookieStoreBackend(store);
+    expect(await backend.get('a')).toEqual({ name: 'a', value: '1' });
+  });
+
   it('lists every cookie the store returns, mapped the same way as get', async () => {
     const store = new FakeCookieStore([
       { name: 'a', value: '1', path: '/', secure: true },
@@ -109,9 +115,11 @@ describe('Cookie Store backend', () => {
     expect(store.setCalls).toEqual([{ name: 'a', value: '1' }]);
   });
 
-  it('rejects secure false, which this backend cannot express', async () => {
-    const backend = createCookieStoreBackend(new FakeCookieStore());
+  it('rejects secure false, which this backend cannot express, without writing to the store', async () => {
+    const store = new FakeCookieStore();
+    const backend = createCookieStoreBackend(store);
     expect(await codeOfRejection(backend.set('a', '1', { secure: false }))).toBe('UNSUPPORTED');
+    expect(store.setCalls).toEqual([]);
   });
 
   it('deletes with the given scope', async () => {

@@ -23,8 +23,7 @@
   },
   "sideEffects": false,
   "files": [
-    "dist",
-    "CHANGELOG.md"
+    "dist"
   ],
   "scripts": {
     "build": "npm run build:types && rollup -c",
@@ -60,8 +59,6 @@
   "devDependencies": {
     "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^12.3.0",
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/git": "^10.0.1",
     "@semantic-release/npm": "^13.1.2",
     "@types/node": "^20.0.0",
     "@vitejs/plugin-basic-ssl": "^2.3.0",

@@ -3,3 +3,5 @@ dist
 coverage
 docs/superpowers
 .superpowers
+.vitest-attachments
+test/browser/__screenshots__

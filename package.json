@@ -30,7 +30,8 @@
     "build:types": "tsc -p tsconfig.build.json --declaration --emitDeclarationOnly --declarationDir dist && node scripts/fix-declaration-specifiers.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage",
+    "test:browser": "vitest run --project browser",
+    "coverage": "vitest run --project unit --coverage",
     "smoke": "node scripts/smoke-package.mjs",
     "semantic-release": "semantic-release"
   },
@@ -62,12 +63,16 @@
     "@semantic-release/npm": "^13.1.2",
     "@typescript-eslint/eslint-plugin": "^4.6.0",
     "@typescript-eslint/parser": "^4.6.0",
+    "@vitest/browser": "^4.1.11",
+    "@vitest/browser-playwright": "^4.1.11",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^7.12.1",
+    "playwright": "^1.62.1",
     "rollup": "^4.62.5",
     "semantic-release": "^24.2.9",
     "tslib": "^2.8.1",
     "typescript": "^5.9.3",
+    "vite": "^8.2.2",
     "vitest": "^4.1.11"
   },
   "overrides": {

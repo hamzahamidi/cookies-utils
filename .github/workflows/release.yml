@@ -31,10 +31,11 @@ jobs:
       - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
-      # .releaserc.json restricts releases to the main branch, so on a pull
-      # request semantic-release stops at that branch check and exits before
-      # it ever reaches npm authentication. This step catches configuration
-      # and plugin errors only. It does not prove that OIDC publishing works.
+      # semantic-release's own isPr guard returns before verifyConditions and
+      # before the branch check in .releaserc.json, so on a pull request it
+      # exits before it ever reaches npm authentication. This step catches
+      # configuration and plugin errors only. It does not prove that OIDC
+      # publishing works.
       - name: Dry run
         if: github.event_name == 'pull_request'
         run: npx semantic-release --dry-run

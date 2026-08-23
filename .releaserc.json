@@ -15,9 +15,9 @@
                 ],
                 "parserOpts": {
                     "noteKeywords": [
-                        "BREAKING",
                         "BREAKING CHANGE",
-                        "BREAKING CHANGES"
+                        "BREAKING CHANGES",
+                        "BREAKING"
                     ]
                 }
             }

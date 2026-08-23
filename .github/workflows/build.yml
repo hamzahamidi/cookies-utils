@@ -22,11 +22,16 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
+      - run: npm run typecheck
       - run: npm run build
       - run: npm run coverage
       - run: npm run smoke
       - name: Upload coverage
-        if: matrix.node-version == '22.x'
+        # Forked pull requests receive no secrets, so CODECOV_TOKEN is absent
+        # and the upload would fail every outside contribution. A push event
+        # has no pull_request context at all, so the fork check treats a
+        # missing value as "not a fork" rather than skipping main too.
+        if: matrix.node-version == '22.x' && github.event.pull_request.head.repo.fork != true
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

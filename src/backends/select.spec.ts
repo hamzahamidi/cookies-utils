@@ -38,6 +38,30 @@ describe('selectBackend', () => {
     expect(code).toBe('NO_COOKIE_ACCESS');
   });
 
+  it('ignores a document with no cookie property, which cannot carry a cookie', () => {
+    globalRef.document = {};
+    let code = 'DID_NOT_THROW';
+    try {
+      selectBackend();
+    } catch (error) {
+      code = (error as CookieError).code;
+    }
+    expect(code).toBe('NO_COOKIE_ACCESS');
+  });
+
+  it('prefers the Cookie Store over a document with no cookie property', async () => {
+    globalRef.document = {};
+    globalRef.cookieStore = fakeStore();
+    expect(await selectBackend().getAll()).toEqual([]);
+  });
+
+  it('ignores a document with no cookie property on a plain http origin too', async () => {
+    globalRef.location = { protocol: 'http:' };
+    globalRef.document = {};
+    globalRef.cookieStore = fakeStore();
+    expect(await selectBackend().getAll()).toEqual([]);
+  });
+
   it('uses document.cookie on a plain http origin even when cookieStore exists', async () => {
     globalRef.location = { protocol: 'http:' };
     globalRef.cookieStore = fakeStore();

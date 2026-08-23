@@ -1,27 +1,45 @@
 name: Release
+
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Setup Node.js
-        uses: actions/setup-node@v1
+      - uses: actions/setup-node@v4
         with:
-          node-version: 12
-      - name: Install dependencies
-        run: npm ci
-      - name: Build packages
-        run: npm run build
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      # Node 22 ships npm 10, and Trusted Publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm run build
+      # .releaserc.json restricts releases to the main branch, so on a pull
+      # request semantic-release stops at that branch check and exits before
+      # it ever reaches npm authentication. This step catches configuration
+      # and plugin errors only. It does not prove that OIDC publishing works.
+      - name: Dry run
+        if: github.event_name == 'pull_request'
+        run: npx semantic-release --dry-run
       - name: Release
+        if: github.event_name == 'push'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm run semantic-release
+        run: npx semantic-release

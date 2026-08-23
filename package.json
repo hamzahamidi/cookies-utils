@@ -57,19 +57,21 @@
   "devDependencies": {
     "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^12.3.0",
-    "@semantic-release/changelog": "^5.0.1",
-    "@semantic-release/git": "^9.0.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/npm": "^13.1.2",
     "@typescript-eslint/eslint-plugin": "^4.6.0",
     "@typescript-eslint/parser": "^4.6.0",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^7.12.1",
     "rollup": "^4.62.5",
-    "semantic-release": "^17.2.2",
+    "semantic-release": "^24.2.9",
     "tslib": "^2.8.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   },
   "overrides": {
-    "npm": "^12.0.0"
+    "npm": "^12.0.0",
+    "@semantic-release/npm": "^13.1.2"
   }
 }

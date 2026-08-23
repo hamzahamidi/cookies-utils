@@ -14,6 +14,8 @@
 
 This project contains functions to help manage cookies.
 
+See [ROADMAP.md](ROADMAP.md) for where the library is heading.
+
 ## Installation
 
 ### NPM

@@ -28,9 +28,10 @@
   "scripts": {
     "build": "npm run build:types && rollup -c",
     "build:types": "tsc -p tsconfig.build.json --declaration --emitDeclarationOnly --declarationDir dist && node scripts/fix-declaration-specifiers.mjs",
-    "test": "vitest run",
+    "test": "vitest run --project unit",
     "test:watch": "vitest",
     "test:browser": "vitest run --project browser",
+    "test:browser:webkit": "INCLUDE_WEBKIT=1 vitest run --project browser",
     "coverage": "vitest run --project unit --coverage",
     "smoke": "node scripts/smoke-package.mjs",
     "semantic-release": "semantic-release"

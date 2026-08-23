@@ -11,6 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      # Report every leg. With the default fail-fast, one leg failing cancels
+      # the others mid-step, which reads as a second failure and hides whether
+      # the remaining versions are actually healthy.
+      fail-fast: false
       matrix:
         node-version: [20.x, 22.x, 24.x]
 

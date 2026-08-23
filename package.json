@@ -1,7 +1,7 @@
 {
   "name": "cookies-utils",
   "version": "0.0.0-development",
-  "description": "A JavaScript API for handling cookies",
+  "description": "A tiny, typed cookie API that uses the Cookie Store API when available and falls back safely to document.cookie",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -47,7 +47,10 @@
     "document.cookie",
     "set cookie",
     "get cookie",
-    "delete cookie"
+    "delete cookie",
+    "typescript",
+    "typed",
+    "async"
   ],
   "author": "Hamza HAMIDI",
   "license": "MIT",

@@ -6,6 +6,11 @@ const SAME_SITE_LABELS: Record<SameSite, string> = {
   none: 'None',
 };
 
+/**
+ * Builds a document.cookie write string from wire level name and value plus
+ * normalized attributes. Every attribute is checked with !== undefined rather
+ * than truthiness, so maxAge: 0 is emitted instead of being dropped.
+ */
 export function serialize(
   encodedName: string,
   encodedValue: string,

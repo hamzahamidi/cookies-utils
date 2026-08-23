@@ -7,6 +7,11 @@ export interface CookieTarget {
   cookie: string;
 }
 
+/**
+ * Builds a Backend backed by document.cookie. Cannot report a cookie's path
+ * or domain, and cannot see HttpOnly cookies, because neither is exposed to
+ * script through this API.
+ */
 export function createDocumentCookieBackend(target: CookieTarget): Backend {
   const readAll = (): Cookie[] =>
     parse(target.cookie).map((pair) => ({ name: pair.name, value: pair.value }));

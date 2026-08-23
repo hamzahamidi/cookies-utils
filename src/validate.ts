@@ -4,6 +4,12 @@ import type { CookieAttributes, NormalizedAttributes, SameSite } from './types';
 const SAME_SITE_VALUES: readonly SameSite[] = ['strict', 'lax', 'none'];
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
 
+/**
+ * Validates a cookie name, value and attributes, and normalizes them for a
+ * backend. Throws CookieError before anything reaches the browser when the
+ * value is not a string or when attributes conflict, for example sameSite:
+ * 'none' without secure: true, or the __Host- prefix combined with a domain.
+ */
 export function validate(
   name: string,
   value: string,

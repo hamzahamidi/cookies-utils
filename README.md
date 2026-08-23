@@ -242,7 +242,7 @@ other empty, non-string or control-character name.
 | `maxAge` | `number` | `set` | Relative expiry in seconds. Zero or negative expires the cookie immediately. Must be an integer. Cannot be combined with `expires`. |
 | `secure` | `boolean` | `set` | Sends the cookie only over https. No default: the Cookie Store backend always writes a Secure cookie and rejects `secure: false` with `UNSUPPORTED`. |
 | `sameSite` | `"strict" \| "lax" \| "none"` | `set` | Cross-site sending policy, lowercase only. Defaults to `"lax"` when omitted. `"none"` requires `secure: true`. |
-| `partitioned` | `boolean` | `set`, `delete` | CHIPS partitioned storage. On `set()`, requires `secure: true`. `delete(name, { partitioned: true })` is unreliable on the `document.cookie` backend: `delete()` has no `secure` option, so the write carries `Partitioned` without `Secure`, and a CHIPS enforcing browser rejects that combination, so nothing is deleted. Reachable only on an https origin with no `CookieStore`. |
+| `partitioned` | `boolean` | `set`, `delete` | CHIPS partitioned storage. On `set()`, requires `secure: true`. On `delete()` the expiry write asserts `Secure` for you: CHIPS requires a Partitioned cookie to be Secure, and a browser discards a write carrying `Partitioned` without it, which would leave the cookie in place. |
 
 `delete()` defaulting `path` to `"/"` means a bare `delete(name)` matches a
 bare `set(name, value)` without either call naming a path. A `path` or

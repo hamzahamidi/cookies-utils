@@ -59,4 +59,20 @@ describe('document.cookie backend', () => {
       'a=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/app; Domain=example.com',
     ]);
   });
+
+  it('asserts Secure when deleting a partitioned cookie', async () => {
+    const backend = createDocumentCookieBackend(target);
+    await backend.delete('a', { path: '/', partitioned: true });
+    expect(target.writes).toEqual([
+      'a=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Secure; Partitioned',
+    ]);
+  });
+
+  it('does not assert Secure when deleting an unpartitioned cookie', async () => {
+    const backend = createDocumentCookieBackend(target);
+    await backend.delete('a', { path: '/' });
+    expect(target.writes).toEqual([
+      'a=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/',
+    ]);
+  });
 });

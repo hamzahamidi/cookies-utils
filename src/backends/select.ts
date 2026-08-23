@@ -22,6 +22,16 @@ function isPlainHttpOrigin(): boolean {
   }
 }
 
+/**
+ * True only for a document that can actually carry cookies. A bare object,
+ * which a test double or an SSR shim may install as globalThis.document, would
+ * otherwise be chosen here and then fail inside parse() with a TypeError
+ * instead of a CookieError.
+ */
+function canCarryCookies(target: CookieTarget | undefined): target is CookieTarget {
+  return typeof target?.cookie === 'string';
+}
+
 /** Detection runs per call, never at module evaluation, so importing stays SSR safe. */
 export function selectBackend(): Backend {
   const scope = globalThis as Record<string, unknown>;
@@ -29,11 +39,11 @@ export function selectBackend(): Backend {
 
   // On a plain http origin, prefer document.cookie over Cookie Store even
   // when both exist: WebKit silently drops cookieStore.set() writes there.
-  // The "target exists" guard matters on its own, separately from https:
+  // The canCarryCookies guard matters on its own, separately from https:
   // a service worker has cookieStore but no document at all, so without
   // this guard a plain http service worker would fall through to the
   // NO_COOKIE_ACCESS branch below instead of using the Cookie Store it has.
-  if (isPlainHttpOrigin() && target !== undefined && target !== null) {
+  if (isPlainHttpOrigin() && canCarryCookies(target)) {
     return createDocumentCookieBackend(target);
   }
 
@@ -42,7 +52,7 @@ export function selectBackend(): Backend {
     return createCookieStoreBackend(store);
   }
 
-  if (target !== undefined && target !== null) {
+  if (canCarryCookies(target)) {
     return createDocumentCookieBackend(target);
   }
 

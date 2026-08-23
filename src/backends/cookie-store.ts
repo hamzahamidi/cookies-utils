@@ -61,8 +61,17 @@ export function createCookieStoreBackend(store: CookieStoreLike): Backend {
       const options: Record<string, unknown> = { name, value };
       if (attributes.path !== undefined) options.path = attributes.path;
       if (attributes.domain !== undefined) options.domain = attributes.domain;
-      if (attributes.maxAge !== undefined) options.maxAge = attributes.maxAge;
-      if (attributes.expires !== undefined) options.expires = attributes.expires;
+      // maxAge is not a CookieInit member and WebIDL drops unknown members in
+      // silence, so forwarding it writes a session cookie on any engine that
+      // has not implemented it. validate() guarantees maxAge and expires are
+      // never both set. A non-positive maxAge becomes the epoch rather than
+      // the arithmetic result, because Firefox keeps a cookie whose expires is
+      // the current millisecond exactly.
+      if (attributes.maxAge !== undefined) {
+        options.expires = attributes.maxAge > 0 ? Date.now() + attributes.maxAge * 1000 : 0;
+      } else if (attributes.expires !== undefined) {
+        options.expires = attributes.expires;
+      }
       if (attributes.sameSite !== undefined) options.sameSite = attributes.sameSite;
       if (attributes.partitioned !== undefined) options.partitioned = attributes.partitioned;
 

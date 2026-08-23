@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CookieError } from '../errors';
 import {
   createCookieStoreBackend,
@@ -38,7 +38,17 @@ const codeOfRejection = async (promise: Promise<unknown>): Promise<string> => {
   return 'DID_NOT_REJECT';
 };
 
+/** A clock the maxAge to expires conversion can be asserted against exactly. */
+const FIXED_NOW = Date.UTC(2099, 0, 2, 3, 4, 5);
+const freezeClock = (): void => {
+  vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+};
+
 describe('Cookie Store backend', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('normalizes a missing cookie from null to undefined', async () => {
     const backend = createCookieStoreBackend(new FakeCookieStore());
     expect(await backend.get('a')).toBeUndefined();
@@ -86,11 +96,19 @@ describe('Cookie Store backend', () => {
   });
 
   it('forwards the options the Cookie Store API accepts', async () => {
+    freezeClock();
     const store = new FakeCookieStore();
     const backend = createCookieStoreBackend(store);
     await backend.set('a', '1', { maxAge: 60, path: '/', sameSite: 'lax', partitioned: true, secure: true });
     expect(store.setCalls).toEqual([
-      { name: 'a', value: '1', maxAge: 60, path: '/', sameSite: 'lax', partitioned: true },
+      {
+        name: 'a',
+        value: '1',
+        expires: FIXED_NOW + 60_000,
+        path: '/',
+        sameSite: 'lax',
+        partitioned: true,
+      },
     ]);
   });
 
@@ -101,11 +119,36 @@ describe('Cookie Store backend', () => {
     expect(store.setCalls).toEqual([{ name: 'a', value: '1', domain: 'example.com', expires: 42 }]);
   });
 
-  it('forwards maxAge zero, which a truthiness check would drop', async () => {
+  it('converts maxAge to expires, the only one of the two CookieInit specifies', async () => {
+    freezeClock();
+    const store = new FakeCookieStore();
+    const backend = createCookieStoreBackend(store);
+    await backend.set('a', '1', { maxAge: 90 });
+    expect(store.setCalls).toEqual([{ name: 'a', value: '1', expires: FIXED_NOW + 90_000 }]);
+  });
+
+  it('never sends maxAge, which WebIDL would drop in silence into a session cookie', async () => {
+    freezeClock();
+    const store = new FakeCookieStore();
+    const backend = createCookieStoreBackend(store);
+    await backend.set('a', '1', { maxAge: 90 });
+    expect(Object.keys(store.setCalls[0])).not.toContain('maxAge');
+  });
+
+  it('converts maxAge zero to the epoch, which every engine reads as already expired', async () => {
+    freezeClock();
     const store = new FakeCookieStore();
     const backend = createCookieStoreBackend(store);
     await backend.set('a', '1', { maxAge: 0 });
-    expect(store.setCalls).toEqual([{ name: 'a', value: '1', maxAge: 0 }]);
+    expect(store.setCalls).toEqual([{ name: 'a', value: '1', expires: 0 }]);
+  });
+
+  it('converts a negative maxAge to the epoch too', async () => {
+    freezeClock();
+    const store = new FakeCookieStore();
+    const backend = createCookieStoreBackend(store);
+    await backend.set('a', '1', { maxAge: -60 });
+    expect(store.setCalls).toEqual([{ name: 'a', value: '1', expires: 0 }]);
   });
 
   it('never forwards secure, which CookieStore.set does not accept', async () => {

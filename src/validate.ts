@@ -4,6 +4,38 @@ import type { CookieAttributes, NormalizedAttributes, SameSite } from './types';
 const SAME_SITE_VALUES: readonly SameSite[] = ['strict', 'lax', 'none'];
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
 
+/** The two scope attributes delete() shares with set(). */
+type Scope = Pick<CookieAttributes, 'path' | 'domain'>;
+
+/**
+ * Rejects a name no cookie can carry. Every public function calls this, so an
+ * unusable name surfaces as a CookieError rather than an empty-named write
+ * through document.cookie or a raw browser TypeError through the Cookie Store.
+ */
+export function validateName(name: string): void {
+  if (typeof name !== 'string' || name === '') {
+    throw new CookieError('INVALID_NAME', 'Cookie name must be a non-empty string.');
+  }
+  if (CONTROL_CHARACTERS.test(name)) {
+    throw new CookieError('INVALID_NAME', 'Cookie name must not contain control characters.');
+  }
+}
+
+/**
+ * Rejects a path or domain that would inject an attribute. Neither passes
+ * through encode(), unlike name and value, so a ';' inside either would close
+ * its own field and open another one. Both routes to serialize(), set() and
+ * delete(), call this.
+ */
+export function validateScope({ path, domain }: Scope): void {
+  if (path !== undefined && (CONTROL_CHARACTERS.test(path) || path.includes(';'))) {
+    throw new CookieError('INVALID_OPTIONS', 'path must not contain control characters or a semicolon.');
+  }
+  if (domain !== undefined && (CONTROL_CHARACTERS.test(domain) || domain.includes(';'))) {
+    throw new CookieError('INVALID_OPTIONS', 'domain must not contain control characters or a semicolon.');
+  }
+}
+
 /**
  * Validates a cookie name, value and attributes, and normalizes them for a
  * backend. Throws CookieError before anything reaches the browser when the
@@ -15,24 +47,14 @@ export function validate(
   value: string,
   attributes: CookieAttributes = {},
 ): NormalizedAttributes {
-  if (typeof name !== 'string' || name === '') {
-    throw new CookieError('INVALID_NAME', 'Cookie name must be a non-empty string.');
-  }
-  if (CONTROL_CHARACTERS.test(name)) {
-    throw new CookieError('INVALID_NAME', 'Cookie name must not contain control characters.');
-  }
+  validateName(name);
   if (typeof value !== 'string') {
     throw new CookieError('INVALID_VALUE', 'Cookie value must be a string.');
   }
 
   const { expires, maxAge, sameSite, secure, partitioned, path, domain } = attributes;
 
-  if (path !== undefined && (CONTROL_CHARACTERS.test(path) || path.includes(';'))) {
-    throw new CookieError('INVALID_OPTIONS', 'path must not contain control characters or a semicolon.');
-  }
-  if (domain !== undefined && (CONTROL_CHARACTERS.test(domain) || domain.includes(';'))) {
-    throw new CookieError('INVALID_OPTIONS', 'domain must not contain control characters or a semicolon.');
-  }
+  validateScope(attributes);
 
   if (maxAge !== undefined && expires !== undefined) {
     throw new CookieError('INVALID_OPTIONS', 'Use either maxAge or expires, not both.');

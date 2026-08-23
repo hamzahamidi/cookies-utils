@@ -66,8 +66,8 @@ import { get, set } from "cookies-utils";
 
 | Backend | Used when | Attributes readable |
 | --- | --- | --- |
-| Cookie Store API | `cookieStore` exists and the origin is https, or there is no `document` (a service worker) | Chromium: the full record (`path`, `domain`, `expires`, `secure`, `sameSite`, `partitioned`). Firefox and WebKit: name and value only, see below |
-| `document.cookie` | any non-https origin with a `document`, or wherever Cookie Store is unavailable | no, name and value only |
+| Cookie Store API | `cookieStore` exists, unless the origin is non-https and there is a `document` that can carry cookies (see WebKit note below) | Chromium: the full record (`path`, `domain`, `expires`, `secure`, `sameSite`, `partitioned`). Firefox and WebKit: name and value only, see below |
+| `document.cookie` | any non-https origin with a `document` that can carry cookies, or wherever `cookieStore` is unavailable | no, name and value only |
 
 The Cookie Store API reached Baseline in June 2025; caniuse reports it as
 supported from Safari 18.4 and Firefox 140. The library picks a backend per
@@ -90,11 +90,11 @@ ignoring you.
 
 ### WebKit on plain http origins
 
-Safari and WebKit do not persist a write made through `cookieStore.set()` on a
-plain http origin, even though `isSecureContext` reports true there; the same
-write works correctly over https. This was verified against Playwright's
-WebKit build, which is not the shipping Safari browser, so Safari is very
-likely affected the same way rather than certainly so. The library therefore
+Playwright's WebKit build does not persist a write made through
+`cookieStore.set()` on a plain http origin, even though `isSecureContext`
+reports true there; the same write works correctly over https. That build is
+not the shipping Safari browser, so Safari is very likely affected the same
+way, though not certainly so. The library therefore
 prefers `document.cookie` on any non-https origin regardless of which backend
 would otherwise be picked, so this is handled rather than merely disclosed,
 and production sites on https are unaffected either way. The real browser
@@ -122,8 +122,36 @@ decoded value and compares exactly. That is a deliberate correction, not a
 like for like replacement.
 
 The rest of this section covers what the table above does not: a decoding
-trap almost every 1.0.0 call site hits, a list of inputs 1.0.0 tolerated that
-2.0.0 now rejects, and a reference for the options and error codes.
+trap almost every 1.0.0 call site hits, two default attributes that change
+what a caller sends without changing the call site, a list of inputs 1.0.0
+tolerated that 2.0.0 now rejects, and a reference for the options and error
+codes.
+
+### The default path can shadow a 1.0.0 cookie
+
+1.0.0's `setCookie` wrote no `path` when the caller omitted one, so those
+cookies live at the writing page's directory, for example `/app`; 2.0.0
+defaults `path` to `"/"`. After upgrading, `set(name, value)` writes a new
+cookie at `/` while the 1.0.0 cookie stays at `/app`, and since
+`document.cookie` lists the more specific path first, `get()` returns the
+first match it finds there and keeps reporting the stale `/app` value with no
+error, while `delete(name)` now targets `/` and never clears the old one.
+Delete the old cookie at its original path before or during the upgrade:
+`await cookies.delete("session", { path: "/app" })`.
+
+### The default SameSite changes cross-site behavior
+
+1.0.0 serialized `sameSite` as `'; samesite' + value` with no `=`, so
+browsers discarded the attribute and no cookie 1.0.0 ever wrote carried a
+SameSite value, whatever the caller passed. 2.0.0 writes an explicit
+`SameSite=Lax` by default, which is never looser than an implicit default, so
+the only realistic breakage is a cookie that used to be sent on a cross-site
+request and now is not: a cross-site subresource or credentialed
+cross-origin fetch, or a top-level cross-site POST returning to the site
+(SAML or a payment provider return), which loses Chromium's
+Lax-allowing-unsafe grace period. There is no way to write a cookie with no
+SameSite attribute at all, since the default always applies; for cross-site
+use, pass `sameSite: "none"` with `secure: true`.
 
 ### Delete your own decodeURIComponent call
 
@@ -156,6 +184,7 @@ const value = await get("session");
 `set()` throws `CookieError` instead of writing a cookie 1.0.0 would have
 written, for:
 
+- a value that is not a string, for example `set("a", 123)`
 - `maxAge` and `expires` supplied together
 - `sameSite: "none"` without `secure: true`
 - a `sameSite` value that is not exactly `"strict"`, `"lax"` or `"none"`,
@@ -173,9 +202,11 @@ Anything your 1.0.0 code relied on being silently tolerated in this list now
 gets a rejection, before anything is written. See the error reference below
 for which `CookieErrorCode` each case throws.
 
-`get("")` and `has("")` changed too, on the read side. 1.0.0-equivalent code
-that looked up an empty name got back `undefined` or `false`. Both now reject
-with `INVALID_NAME`, along with every other empty or control-character name.
+`get("")` and `has("")` changed too, on the read side, and so did a
+non-string name: `get(123)` was silently coerced to text before the match in
+1.0.0. 1.0.0-equivalent code that looked up an empty name got back
+`undefined` or `false`. Both now reject with `INVALID_NAME`, along with every
+other empty, non-string or control-character name.
 
 ### Options and error reference
 
@@ -187,7 +218,7 @@ with `INVALID_NAME`, along with every other empty or control-character name.
 | `maxAge` | `number` | `set` | Relative expiry in seconds. Zero or negative expires the cookie immediately. Must be an integer. Cannot be combined with `expires`. |
 | `secure` | `boolean` | `set` | Sends the cookie only over https. No default: the Cookie Store backend always writes a Secure cookie and rejects `secure: false` with `UNSUPPORTED`. |
 | `sameSite` | `"strict" \| "lax" \| "none"` | `set` | Cross-site sending policy, lowercase only. Defaults to `"lax"` when omitted. `"none"` requires `secure: true`. |
-| `partitioned` | `boolean` | `set`, `delete` | CHIPS partitioned storage. On `set()`, requires `secure: true`; `delete()` takes no `secure` option, so the requirement is not checked there. |
+| `partitioned` | `boolean` | `set`, `delete` | CHIPS partitioned storage. On `set()`, requires `secure: true`. `delete(name, { partitioned: true })` is unreliable on the `document.cookie` backend: `delete()` has no `secure` option, so the write carries `Partitioned` without `Secure`, and a CHIPS enforcing browser rejects that combination, so nothing is deleted. Reachable only on an https origin with no `CookieStore`. |
 
 `delete()` defaulting `path` to `"/"` means a bare `delete(name)` matches a
 bare `set(name, value)` without either call naming a path. A `path` or
@@ -199,7 +230,7 @@ cookie has to name the same ones.
 
 | `CookieErrorCode` | Thrown when |
 | --- | --- |
-| `INVALID_NAME` | the name is empty or contains a control character |
+| `INVALID_NAME` | the name is empty, not a string, or contains a control character |
 | `INVALID_VALUE` | the value passed to `set()` is not a string |
 | `INVALID_OPTIONS` | attributes conflict: see "Inputs 1.0.0 tolerated" above for the `set()` cases, plus a non-finite `expires` (an invalid `Date`, or `Infinity`), and, on `delete()`, a `path` or `domain` with a semicolon or control character |
 | `UNSUPPORTED` | the selected backend cannot perform the request, for example `secure: false` on the Cookie Store backend |

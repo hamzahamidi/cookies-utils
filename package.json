@@ -33,7 +33,7 @@
     "test:watch": "vitest",
     "test:browser": "vitest run --project browser",
     "coverage": "vitest run --project unit --coverage",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.scripts.json",
     "smoke": "node scripts/smoke-package.mjs",
     "semantic-release": "semantic-release"
   },

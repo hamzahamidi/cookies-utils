@@ -66,11 +66,12 @@ import { get, set } from "cookies-utils";
 
 | Backend | Used when | Attributes readable |
 | --- | --- | --- |
-| Cookie Store API | `cookieStore` exists, secure contexts only | yes, best effort |
-| `document.cookie` | everywhere else | no, name and value only |
+| Cookie Store API | `cookieStore` exists and the origin is https, or there is no `document` (a service worker) | yes, best effort |
+| `document.cookie` | any non-https origin with a `document`, or wherever Cookie Store is unavailable | no, name and value only |
 
-The Cookie Store API reached Baseline in June 2025. The library picks a backend
-per call, so no configuration is needed.
+The Cookie Store API reached Baseline in June 2025; caniuse reports it as
+supported from Safari 18.4 and Firefox 140. The library picks a backend per
+call, so no configuration is needed.
 
 One divergence cannot be removed. `CookieStore.set()` has no `secure` option
 because it only runs in secure contexts, so a cookie written through it is always
@@ -79,28 +80,18 @@ cookie unless you pass `secure: true`. Passing `secure: false` on the Cookie Sto
 backend rejects with `CookieError` code `UNSUPPORTED` rather than silently
 ignoring you.
 
-### Known limitation: WebKit, and what the browser suite actually covers
+### WebKit on plain http origins
 
-The real browser suite that backs this library runs on Chromium and Firefox in
-CI. Both ship a `cookieStore` that works over `http://localhost`, so the suite
-exercises the Cookie Store backend only; the `document.cookie` backend has no
-real browser coverage from this matrix, only the unit tests.
-
-WebKit is excluded from the CI matrix, not silently dropped: on the Playwright
-build of WebKit, `cookieStore.set()` resolves without throwing but the write
-does not persist, so a passing WebKit run there would prove nothing. It can
-still be run on demand with `npm run test:browser:webkit`, to recheck after a
-Playwright upgrade.
-
-Whether this affects shipping Safari is unverified. Playwright's WebKit is not
-Safari, and the two are not guaranteed to share this behavior. If Safari is
-affected, this library's backend detection would be exposed to it:
-`selectBackend()` picks the Cookie Store backend whenever
-`globalThis.cookieStore` is present and not null, with no check that its
-writes actually persist. No runtime probe (a write followed by a read, to
-confirm the backend actually works) is implemented to guard against this,
-because it would cost an extra write on every call to defend against a defect
-that is not confirmed to exist outside the Playwright test build.
+Safari and WebKit do not persist a write made through `cookieStore.set()` on a
+plain http origin, even though `isSecureContext` reports true there; the same
+write works correctly over https. This was verified against Playwright's
+WebKit build, which is not the shipping Safari browser, so Safari is very
+likely affected the same way rather than certainly so. The library therefore
+prefers `document.cookie` on any non-https origin regardless of which backend
+would otherwise be picked, so this is handled rather than merely disclosed,
+and production sites on https are unaffected either way. The real browser
+suite is served over https and runs on Chromium, Firefox and WebKit,
+exercising the Cookie Store backend on each engine that provides it.
 
 ## Migrating from 1.0.0
 

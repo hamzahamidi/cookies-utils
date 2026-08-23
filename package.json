@@ -31,7 +31,6 @@
     "test": "vitest run --project unit",
     "test:watch": "vitest",
     "test:browser": "vitest run --project browser",
-    "test:browser:webkit": "INCLUDE_WEBKIT=1 vitest run --project browser",
     "coverage": "vitest run --project unit --coverage",
     "smoke": "node scripts/smoke-package.mjs",
     "semantic-release": "semantic-release"
@@ -64,6 +63,7 @@
     "@semantic-release/npm": "^13.1.2",
     "@typescript-eslint/eslint-plugin": "^4.6.0",
     "@typescript-eslint/parser": "^4.6.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitest/browser": "^4.1.11",
     "@vitest/browser-playwright": "^4.1.11",
     "@vitest/coverage-v8": "^4.1.11",

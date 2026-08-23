@@ -1,23 +1,12 @@
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
-// No @types/node is installed. Declare just enough of the Node global this
-// file reads rather than adding a devDependency for one property lookup.
-declare const process: { env: Record<string, string | undefined> };
-
-// WebKit is excluded from the default matrix: on this Playwright WebKit build,
-// cookieStore.set() resolves without throwing but the write does not persist,
-// so the conformance suite cannot tell a passing write from a silently dropped
-// one there. Run `npm run test:browser:webkit` to include it on demand, for
-// example after a Playwright upgrade, to check whether this has been fixed.
 const browserInstances: { browser: 'chromium' | 'firefox' | 'webkit' }[] = [
   { browser: 'chromium' },
   { browser: 'firefox' },
+  { browser: 'webkit' },
 ];
-
-if (process.env.INCLUDE_WEBKIT === '1') {
-  browserInstances.push({ browser: 'webkit' });
-}
 
 export default defineConfig({
   test: {
@@ -37,6 +26,15 @@ export default defineConfig({
         },
       },
       {
+        // https is required for this suite: WebKit does not persist
+        // cookieStore.set() writes on a plain http origin (it works
+        // correctly over https), so the conformance suite is served over
+        // https to exercise the Cookie Store backend on all three engines.
+        // @vitejs/plugin-basic-ssl mints a throwaway self-signed
+        // certificate; the Playwright provider sets ignoreHTTPSErrors: true
+        // unconditionally, so no matching trust setup is needed on the
+        // client side.
+        plugins: [basicSsl()],
         test: {
           name: 'browser',
           include: ['test/browser/**/*.spec.ts'],

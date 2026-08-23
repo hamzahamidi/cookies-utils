@@ -79,6 +79,29 @@ cookie unless you pass `secure: true`. Passing `secure: false` on the Cookie Sto
 backend rejects with `CookieError` code `UNSUPPORTED` rather than silently
 ignoring you.
 
+### Known limitation: WebKit, and what the browser suite actually covers
+
+The real browser suite that backs this library runs on Chromium and Firefox in
+CI. Both ship a `cookieStore` that works over `http://localhost`, so the suite
+exercises the Cookie Store backend only; the `document.cookie` backend has no
+real browser coverage from this matrix, only the unit tests.
+
+WebKit is excluded from the CI matrix, not silently dropped: on the Playwright
+build of WebKit, `cookieStore.set()` resolves without throwing but the write
+does not persist, so a passing WebKit run there would prove nothing. It can
+still be run on demand with `npm run test:browser:webkit`, to recheck after a
+Playwright upgrade.
+
+Whether this affects shipping Safari is unverified. Playwright's WebKit is not
+Safari, and the two are not guaranteed to share this behavior. If Safari is
+affected, this library's backend detection would be exposed to it:
+`selectBackend()` picks the Cookie Store backend whenever
+`globalThis.cookieStore` is present and not null, with no check that its
+writes actually persist. No runtime probe (a write followed by a read, to
+confirm the backend actually works) is implemented to guard against this,
+because it would cost an extra write on every call to defend against a defect
+that is not confirmed to exist outside the Playwright test build.
+
 ## Migrating from 1.0.0
 
 Every function is now async and takes positional arguments.

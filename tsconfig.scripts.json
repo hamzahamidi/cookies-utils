@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  // vitest.config.mts imports vitest/config, which re-exports Vite's Node side
+  // types; those carry a triple slash reference to @types/node that applies
+  // to the whole program regardless of the types option above, so this file
+  // has to sit in a project that expects Node globals rather than the one
+  // covering src/**.
+  "include": ["scripts/**/*", "vitest.config.mts"]
+}

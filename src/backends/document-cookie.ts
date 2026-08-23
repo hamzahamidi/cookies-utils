@@ -30,7 +30,12 @@ export function createDocumentCookieBackend(target: CookieTarget): Backend {
     },
 
     async delete(name: string, options: DeleteOptions): Promise<void> {
-      target.cookie = serialize(name, '', { ...options, maxAge: 0, expires: 0 });
+      const attributes: NormalizedAttributes = { ...options, maxAge: 0, expires: 0 };
+      // CHIPS requires a Partitioned cookie to be Secure, so a browser discards a
+      // write carrying Partitioned without it. Deletion works by overwriting with
+      // an expired cookie, so a discarded write leaves the cookie in place.
+      if (options.partitioned === true) attributes.secure = true;
+      target.cookie = serialize(name, '', attributes);
     },
   };
 }

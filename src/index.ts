@@ -41,4 +41,5 @@ async function del(name: string, options: DeleteOptions = {}): Promise<void> {
 
 export { del as delete };
 
+/** Namespace form of get, getAll, has, set and delete, for a single import. */
 export const cookies = { get, getAll, has, set, delete: del };

@@ -1,6 +1,7 @@
 import { CookieError } from '../errors';
 import type { Backend, Cookie, DeleteOptions, NormalizedAttributes, SameSite } from '../types';
 
+/** Shape of a single result from CookieStore.get() or getAll(), before normalization. */
 export interface CookieStoreItem {
   name: string;
   value: string;
@@ -12,6 +13,7 @@ export interface CookieStoreItem {
   partitioned?: boolean;
 }
 
+/** The slice of the Cookie Store API this backend needs, injectable so tests can observe writes without a real cookieStore global. */
 export interface CookieStoreLike {
   get(name: string): Promise<CookieStoreItem | null>;
   getAll(): Promise<CookieStoreItem[]>;
@@ -30,6 +32,12 @@ function toCookie(item: CookieStoreItem): Cookie {
   return cookie;
 }
 
+/**
+ * Builds a Backend backed by the Cookie Store API. Cookies it writes are
+ * Secure by construction: CookieStore.set() has no secure option and only
+ * runs in secure contexts, so secure: false is rejected as UNSUPPORTED rather
+ * than being silently ignored.
+ */
 export function createCookieStoreBackend(store: CookieStoreLike): Backend {
   return {
     async get(name: string): Promise<Cookie | undefined> {

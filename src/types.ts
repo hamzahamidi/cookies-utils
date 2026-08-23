@@ -1,5 +1,11 @@
+/** The SameSite attribute values a cookie can declare. */
 export type SameSite = 'strict' | 'lax' | 'none';
 
+/**
+ * Attributes accepted by set(). Every field is applied only when it is
+ * !== undefined, so maxAge: 0 (expire immediately) is distinguishable from
+ * omitting maxAge entirely.
+ */
 export interface CookieAttributes {
   path?: string;
   domain?: string;
@@ -12,6 +18,11 @@ export interface CookieAttributes {
   partitioned?: boolean;
 }
 
+/**
+ * A cookie as read back by get() or getAll(). Fields beyond name and value are
+ * populated only by the Cookie Store backend; the document.cookie backend can
+ * report a name and value only.
+ */
 export interface Cookie {
   name: string;
   value: string;
@@ -23,6 +34,11 @@ export interface Cookie {
   partitioned?: boolean;
 }
 
+/**
+ * Attributes accepted by delete(). A path or domain that does not match the
+ * cookie's own is a silent no-op, since deletion works by writing an expired
+ * cookie and the browser only overwrites a cookie whose path and domain match.
+ */
 export type DeleteOptions = Pick<CookieAttributes, 'path' | 'domain' | 'partitioned'>;
 
 /** Attributes after validation, where expires is always Unix milliseconds. */

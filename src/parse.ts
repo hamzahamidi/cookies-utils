@@ -1,8 +1,14 @@
+/** One name/value pair as found on the wire, before any decoding. */
 export interface WirePair {
   name: string;
   value: string;
 }
 
+/**
+ * Splits a raw Cookie header into wire level name/value pairs, in header order.
+ * Never builds a RegExp from the header, so a name containing regex metacharacters
+ * cannot change how parsing behaves.
+ */
 export function parse(header: string): WirePair[] {
   const pairs: WirePair[] = [];
 

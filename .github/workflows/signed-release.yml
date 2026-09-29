@@ -85,6 +85,7 @@ jobs:
           fi
 
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$tag_commit" >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         if: steps.release.outputs.skip != 'true'
@@ -96,6 +97,8 @@ jobs:
         id: npm
         env:
           TAG: ${{ steps.release.outputs.tag }}
+          TAG_COMMIT: ${{ steps.release.outputs.commit }}
+          GH_REPOSITORY: ${{ github.repository }}
           OUTPUT_DIR: ${{ runner.temp }}/release-assets
         run: |
           mkdir -p "$OUTPUT_DIR"
@@ -105,6 +108,8 @@ jobs:
           import { join } from 'node:path';
 
           const tag = process.env.TAG;
+          const tagCommit = process.env.TAG_COMMIT;
+          const repository = process.env.GH_REPOSITORY;
           const version = tag.slice(1);
           const assetName = `cookies-utils-${version}.tgz`;
           const metadataResponse = await fetch(`https://registry.npmjs.org/cookies-utils/${version}`);
@@ -136,9 +141,52 @@ jobs:
             throw new Error('downloaded npm tarball did not match registry dist.integrity');
           }
 
+          const attestationsUrl = new URL(metadata.dist.attestations?.url ?? '');
+          const expectedAttestationsPath = `/-/npm/v1/attestations/cookies-utils@${version}`;
+          if (attestationsUrl.protocol !== 'https:' || attestationsUrl.hostname !== 'registry.npmjs.org' || attestationsUrl.pathname !== expectedAttestationsPath) {
+            throw new Error('npm metadata returned an unexpected attestations URL');
+          }
+          const attestationsResponse = await fetch(attestationsUrl);
+          if (!attestationsResponse.ok || new URL(attestationsResponse.url).origin !== 'https://registry.npmjs.org') {
+            throw new Error(`npm attestations request failed or redirected outside registry.npmjs.org: ${attestationsResponse.status}`);
+          }
+          const attestationsDocument = await attestationsResponse.json();
+          const slsaPredicateType = 'https://slsa.dev/provenance/v1';
+          const slsaAttestations = attestationsDocument.attestations?.filter((item) => item.predicateType === slsaPredicateType) ?? [];
+          if (slsaAttestations.length !== 1) {
+            throw new Error(`expected one npm SLSA provenance bundle, found ${slsaAttestations.length}`);
+          }
+
+          const provenanceBundle = slsaAttestations[0].bundle;
+          const envelope = provenanceBundle?.dsseEnvelope;
+          if (!['application/vnd.dev.sigstore.bundle.v0.2+json', 'application/vnd.dev.sigstore.bundle.v0.3+json'].includes(provenanceBundle?.mediaType) || envelope?.payloadType !== 'application/vnd.in-toto+json' || envelope.signatures?.length !== 1) {
+            throw new Error('npm SLSA provenance is not a signed Sigstore DSSE bundle');
+          }
+          const statement = JSON.parse(Buffer.from(envelope.payload, 'base64').toString('utf8'));
+          const expectedDigest = Buffer.from(metadata.dist.integrity.slice('sha512-'.length), 'base64').toString('hex');
+          const expectedSubject = `pkg:npm/cookies-utils@${version}`;
+          if (statement._type !== 'https://in-toto.io/Statement/v1' || statement.predicateType !== slsaPredicateType || statement.subject?.length !== 1 || statement.subject[0].name !== expectedSubject || statement.subject[0].digest?.sha512 !== expectedDigest) {
+            throw new Error('npm SLSA provenance does not describe the exact published package tarball');
+          }
+
+          const workflow = statement.predicate?.buildDefinition?.externalParameters?.workflow;
+          if (workflow?.repository !== `https://github.com/${repository}` || workflow.ref !== 'refs/heads/main' || workflow.path !== '.github/workflows/release.yml') {
+            throw new Error('npm SLSA provenance does not identify the expected release workflow on main');
+          }
+          const predicate = statement.predicate;
+          if (predicate?.buildDefinition?.buildType !== 'https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1' || predicate.runDetails?.builder?.id !== 'https://github.com/actions/runner/github-hosted') {
+            throw new Error('npm SLSA provenance does not identify the expected GitHub Actions builder');
+          }
+          const sourceMatches = predicate.buildDefinition.resolvedDependencies?.filter((dependency) => dependency.digest?.gitCommit === tagCommit && dependency.uri?.startsWith(`git+https://github.com/${repository}@`)) ?? [];
+          if (sourceMatches.length !== 1) {
+            throw new Error('npm SLSA provenance source commit does not match the release tag');
+          }
+
           await writeFile(join(process.env.OUTPUT_DIR, assetName), bytes, { flag: 'wx' });
           const bundleName = `${assetName}.sigstore.json`;
-          await writeFile(process.env.GITHUB_OUTPUT, `tarball=${assetName}\nbundle=${bundleName}\nintegrity=${metadata.dist.integrity}\n`, { flag: 'a' });
+          const provenanceName = `${assetName}.intoto.jsonl`;
+          await writeFile(join(process.env.OUTPUT_DIR, provenanceName), `${JSON.stringify(provenanceBundle)}\n`, { flag: 'wx' });
+          await writeFile(process.env.GITHUB_OUTPUT, `tarball=${assetName}\nbundle=${bundleName}\nprovenance=${provenanceName}\nintegrity=${metadata.dist.integrity}\n`, { flag: 'a' });
           NODE
       - name: Check existing release assets
         if: steps.release.outputs.skip != 'true'
@@ -149,6 +197,7 @@ jobs:
           TAG: ${{ steps.release.outputs.tag }}
           TARBALL: ${{ steps.npm.outputs.tarball }}
           BUNDLE: ${{ steps.npm.outputs.bundle }}
+          PROVENANCE: ${{ steps.npm.outputs.provenance }}
         run: |
           set -euo pipefail
 
@@ -161,35 +210,57 @@ jobs:
           names="$(jq -r '.assets[].name' <<< "$release")"
           has_tarball=false
           has_bundle=false
+          has_provenance=false
           if grep -Fxq "$TARBALL" <<< "$names"; then has_tarball=true; fi
           if grep -Fxq "$BUNDLE" <<< "$names"; then has_bundle=true; fi
+          if grep -Fxq "$PROVENANCE" <<< "$names"; then has_provenance=true; fi
 
-          if [[ "$has_tarball" == true && "$has_bundle" == true ]]; then
+          if [[ "$has_tarball" == true && "$has_bundle" == true && "$has_provenance" == true ]]; then
             echo "state=complete" >> "$GITHUB_OUTPUT"
-          elif [[ "$has_tarball" == false && "$has_bundle" == false ]]; then
+          elif [[ "$has_tarball" == false && "$has_bundle" == false && "$has_provenance" == false ]]; then
             echo "state=missing" >> "$GITHUB_OUTPUT"
+          elif [[ "$has_tarball" == true && "$has_bundle" == true && "$has_provenance" == false ]]; then
+            echo "state=missing-provenance" >> "$GITHUB_OUTPUT"
           else
-            echo "Release has only one of the two signing assets; refusing to replace or complete it automatically" >&2
+            echo "GitHub release has an unexpected partial asset set; refusing to replace or repair it automatically" >&2
             exit 1
           fi
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         if: steps.release.outputs.skip != 'true'
         with:
           cosign-release: v3.1.3
+      - name: Verify npm SLSA provenance
+        if: steps.release.outputs.skip != 'true'
+        env:
+          PROVENANCE: ${{ steps.npm.outputs.provenance }}
+          TARBALL: ${{ steps.npm.outputs.tarball }}
+          ASSET_DIR: ${{ runner.temp }}/release-assets
+        run: |
+          cosign verify-blob-attestation \
+            --type 'https://slsa.dev/provenance/v1' \
+            --bundle "$ASSET_DIR/$PROVENANCE" \
+            --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/release.yml@refs/heads/main' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            "$ASSET_DIR/$TARBALL"
       - name: Verify existing release assets
-        if: steps.assets.outputs.state == 'complete'
+        if: steps.assets.outputs.state == 'complete' || steps.assets.outputs.state == 'missing-provenance'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPOSITORY: ${{ github.repository }}
           TAG: ${{ steps.release.outputs.tag }}
           TARBALL: ${{ steps.npm.outputs.tarball }}
           BUNDLE: ${{ steps.npm.outputs.bundle }}
+          PROVENANCE: ${{ steps.npm.outputs.provenance }}
+          STATE: ${{ steps.assets.outputs.state }}
           EXPECTED_INTEGRITY: ${{ steps.npm.outputs.integrity }}
+          EXPECTED_PROVENANCE_PATH: ${{ runner.temp }}/release-assets/${{ steps.npm.outputs.provenance }}
           ASSET_DIR: ${{ runner.temp }}/existing-assets
         run: |
           set -euo pipefail
           mkdir -p "$ASSET_DIR"
-          gh release download "$TAG" --repo "$GH_REPOSITORY" --dir "$ASSET_DIR" --pattern "$TARBALL" --pattern "$BUNDLE"
+          download_patterns=(--pattern "$TARBALL" --pattern "$BUNDLE")
+          if [[ "$STATE" == 'complete' ]]; then download_patterns+=(--pattern "$PROVENANCE"); fi
+          gh release download "$TAG" --repo "$GH_REPOSITORY" --dir "$ASSET_DIR" "${download_patterns[@]}"
           node --input-type=module - "$ASSET_DIR/$TARBALL" "$EXPECTED_INTEGRITY" <<'NODE'
           import { createHash } from 'node:crypto';
           import { readFile } from 'node:fs/promises';
@@ -203,6 +274,21 @@ jobs:
             --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/signed-release.yml@refs/heads/main' \
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
             "$ASSET_DIR/$TARBALL"
+          if [[ "$STATE" == 'complete' ]]; then
+            node --input-type=module - "$ASSET_DIR/$PROVENANCE" "$EXPECTED_PROVENANCE_PATH" <<'NODE'
+            import assert from 'node:assert/strict';
+            import { readFile } from 'node:fs/promises';
+
+            const [actualPath, expectedPath] = process.argv.slice(2);
+            assert.deepStrictEqual(JSON.parse(await readFile(actualPath, 'utf8')), JSON.parse(await readFile(expectedPath, 'utf8')));
+            NODE
+            cosign verify-blob-attestation \
+              --type 'https://slsa.dev/provenance/v1' \
+              --bundle "$ASSET_DIR/$PROVENANCE" \
+              --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/release.yml@refs/heads/main' \
+              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+              "$ASSET_DIR/$TARBALL"
+          fi
       - name: Sign npm package and upload release assets
         if: steps.assets.outputs.state == 'missing'
         env:
@@ -211,15 +297,26 @@ jobs:
           TAG: ${{ steps.release.outputs.tag }}
           TARBALL: ${{ steps.npm.outputs.tarball }}
           BUNDLE: ${{ steps.npm.outputs.bundle }}
+          PROVENANCE: ${{ steps.npm.outputs.provenance }}
           ASSET_DIR: ${{ runner.temp }}/release-assets
         run: |
           set -euo pipefail
           tarball="$ASSET_DIR/$TARBALL"
           bundle="$ASSET_DIR/$BUNDLE"
+          provenance="$ASSET_DIR/$PROVENANCE"
           cosign sign-blob --yes --bundle "$bundle" "$tarball"
           cosign verify-blob \
             --bundle "$bundle" \
             --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/signed-release.yml@refs/heads/main' \
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
             "$tarball"
-          gh release upload "$TAG" "$tarball" "$bundle" --repo "$GH_REPOSITORY"
+          gh release upload "$TAG" "$tarball" "$bundle" "$provenance" --repo "$GH_REPOSITORY"
+      - name: Add npm provenance to the existing release
+        if: steps.assets.outputs.state == 'missing-provenance'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+          PROVENANCE: ${{ steps.npm.outputs.provenance }}
+          ASSET_DIR: ${{ runner.temp }}/release-assets
+        run: gh release upload "$TAG" "$ASSET_DIR/$PROVENANCE" --repo "$GH_REPOSITORY"

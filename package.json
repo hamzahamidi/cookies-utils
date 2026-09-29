@@ -1,7 +1,7 @@
 {
   "name": "cookies-utils",
   "version": "0.0.0-development",
-  "description": "A tiny, typed cookie API that uses the Cookie Store API when available and falls back safely to document.cookie",
+  "description": "A typed, promise-based cookie API using native Cookie Store when available and falling back to document.cookie",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",

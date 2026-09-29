@@ -18,423 +18,218 @@
     </a>
 </p>
 
-A typed, promise-based cookie API. It uses the native Cookie Store API when available and falls back to `document.cookie`.
+Use the native Cookie Store API on HTTPS pages when it is available, without writing your own <code>document.cookie</code> fallback. <code>cookies-utils</code> provides one typed, promise-based API across both backends, with shared defaults, runtime validation, and documented browser differences.
 
-- One promise-based API across both backends, selected per operation.
-- Shared defaults, runtime validation and typed errors for browser failures that throw.
-- SSR-safe imports and native Window change events where supported.
-- Zero runtime dependencies, ESM, CommonJS and TypeScript declarations. The browser build is about 3.3 kB gzipped, within a 4,096-byte CI budget.
+* Selects a backend per call and uses <code>document.cookie</code> on non-HTTPS pages with cookie access.
+* Provides asynchronous <code>get</code>, <code>getAll</code>, <code>has</code>, <code>set</code>, and <code>delete</code> methods.
+* Defaults writes to the root path and <code>SameSite=Lax</code>.
+* Validates runtime inputs and reports validation and detectable backend errors as <code>CookieError</code>.
+* Ships ESM, CommonJS, and TypeScript declarations with zero runtime dependencies.
 
 ## Why cookies-utils?
 
-Most cookie helpers wrap synchronous `document.cookie`. Native Cookie Store
-offers an asynchronous API and richer cookie data, but browser support and
-behavior still differ. `cookies-utils` gives browser code one API across both,
-normalizes behavior where possible and documents differences it cannot hide.
-
 | Choose | When it fits |
 | --- | --- |
-| `cookies-utils` | You want one async API with native Cookie Store where available, a `document.cookie` fallback, runtime validation and explicit compatibility behavior. |
-| [`js-cookie`](https://github.com/js-cookie/js-cookie) | You want a mature, synchronous `document.cookie` helper and do not need Cookie Store semantics. |
-| Native [`cookieStore`](https://cookiestore.spec.whatwg.org/) | Every supported browser provides it and direct browser behavior is useful. |
-| `document.cookie` | A simple synchronous browser interface is enough. |
+| <code>cookies-utils</code> | You want one async API, native Cookie Store where available, a <code>document.cookie</code> fallback, and runtime option validation. |
+| <a href="https://github.com/js-cookie/js-cookie"><code>js-cookie</code></a> | You want a mature synchronous helper around <code>document.cookie</code>. |
+| Native <a href="https://cookiestore.spec.whatwg.org/"><code>cookieStore</code></a> | Your supported browsers provide it and you want to use the browser API directly. |
+| <code>document.cookie</code> | A synchronous browser interface is sufficient and manual parsing is acceptable. |
 
-Use a Cookie Store polyfill or ponyfill when you need that API shape in
-unsupported browsers and prefer the selected project's compatibility model.
-See its documentation before relying on its fallback behavior.
-
-<details>
-<summary>Detailed behavior comparison</summary>
-
-| Approach | Async | Native Cookie Store | Fallback | Changes a browser global | TypeScript | CHIPS | Prefix checks |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `cookies-utils` | Yes | When available, per call | `document.cookie` | No in modules; CDN build exposes `cookiesUtils` | Built in | Validates options and relies on browser support | Validates `__Secure-`, `__Host-`, and rejects JavaScript writes to HttpOnly prefixes |
-| `document.cookie` | No | No | Native API | No | DOM type only | Browser accepts supported attributes in the cookie string | Browser rules only |
-| `js-cookie` | No | No | Uses `document.cookie` directly | UMD build exposes `Cookies`; does not patch `cookieStore` | `@types/js-cookie` | Accepts the `partitioned` attribute | Browser rules only |
-| Native `cookieStore` | Yes | Yes | No | Supplied by the browser | DOM library types | Browser support | Browser rules |
-
-| Approach | SSR safe import | Error normalization | Runtime dependencies |
-| --- | --- | --- | --- |
-| `cookies-utils` | Data operations reject with `NO_COOKIE_ACCESS`; `onChange()` throws `UNSUPPORTED` outside a supported Window | `CookieError` for thrown backend failures; silent `document.cookie` write failures cannot be observed | None |
-| `document.cookie` | Guard access to `document` | No shared error model; writes may fail silently | None |
-| `js-cookie` | Module import is safe; cookie operations need `document` | No shared `CookieError` contract | None |
-| Native `cookieStore` | Guard access to the browser global | Native browser errors | None |
-
-</details>
-
-See [ROADMAP.md](ROADMAP.md) for where the library is heading.
-
-## Contributing
-
-Use [GitHub Issues](https://github.com/hamzahamidi/cookies-utils/issues) for bug reports, enhancement requests, and general feedback. See [CONTRIBUTING.md](CONTRIBUTING.md) to propose a code or documentation change and run the relevant checks. Report suspected security vulnerabilities through [SECURITY.md](SECURITY.md), not a public issue.
-
-## Two backends, one API
-
-`get`, `getAll`, `has`, `set` and `delete` all return promises: the Cookie Store
-API offers no synchronous form, so neither does this. Defaults are applied once
-before either backend sees them, so both receive identical input: `path` defaults
-to `"/"` and `sameSite` to `"lax"`, which is why a bare `delete(name)` targets the
-same cookie a bare `set(name, value)` wrote. Where neither backend exists, such as
-during a server render, the import still succeeds and a call rejects with
-`CookieError` code `NO_COOKIE_ACCESS`.
-
-Cookie names are not unique. Cookies with the same name can differ by path,
-domain or partition, so `get(name)` returns one match. Use `getAll(name)` when
-every readable cookie with that name matters. `getAll()` without a name lists
-every readable cookie. The document-cookie backend cannot report scope
-attributes; the Cookie Store backend reports those its browser provides.
-
-Before either backend is selected, writes validate the encoded name and value
-pair against the 4096-byte limit, and validate UTF-8 path and domain lengths
-against 1024 bytes each. Explicit paths must be non-empty and start with `/`.
-Explicit domains must be non-empty and syntactically plausible; the browser
-still decides whether a domain matches the current origin. Exceptions thrown
-while selecting or calling either backend reject with `CookieError` code
-`OPERATION_FAILED`, with the original browser error available as `cause`. The
-`document.cookie` setter can silently ignore writes that a browser rejects
-without throwing; those cases cannot be normalized.
+The detailed comparison below covers the API and behavior each option provides.
 
 ## Installation
 
-The current npm release was published from GitHub Actions through npm trusted
-publishing and includes a verifiable [provenance attestation](https://www.npmjs.com/package/cookies-utils?activeTab=provenance).
+~~~sh
+npm install cookies-utils
+~~~
 
-GitHub releases also include the exact npm tarball, its Sigstore signature
-bundle, and the SLSA provenance bundle created during npm trusted publishing.
-The provenance names the source commit and the original `Release` workflow.
+For a browser script tag, the browser build is available from jsDelivr and unpkg. It exposes a <code>cookiesUtils</code> global.
 
-```sh
-VERSION=2.4.0
-TAG="v${VERSION}"
-TARBALL="cookies-utils-${VERSION}.tgz"
-BUNDLE="${TARBALL}.sigstore.json"
-PROVENANCE="${TARBALL}.intoto.jsonl"
-
-gh release download "$TAG" --repo hamzahamidi/cookies-utils --pattern "$TARBALL" --pattern "$BUNDLE" --pattern "$PROVENANCE"
-cosign verify-blob \
-  --bundle "$BUNDLE" \
-  --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/signed-release.yml@refs/heads/main' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  "$TARBALL"
-cosign verify-blob-attestation \
-  --type 'https://slsa.dev/provenance/v1' \
-  --bundle "$PROVENANCE" \
-  --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/release.yml@refs/heads/main' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  "$TARBALL"
-```
-
-The workflow checks the tarball against npm's published SHA-512 integrity value
-and verifies the provenance subject, source commit, and workflow identity before
-uploading. The `.intoto.jsonl` asset is the Sigstore bundle containing npm's
-signed SLSA statement, certificate, and transparency proof. Replace `2.4.0`
-with the version you want to verify.
-
-Install from npm with `npm install cookies-utils`, or load the browser build from
-jsDelivr or unpkg for a `cookiesUtils` global:
-
-```html
+~~~html
 <script src="https://cdn.jsdelivr.net/npm/cookies-utils/dist/cookies-utils.min.js"></script>
 <script>
   cookiesUtils.delete("name").then(() => console.log("gone"));
 </script>
-```
+~~~
 
-Replace the host with `https://unpkg.com/cookies-utils/dist/cookies-utils.min.js`
-to serve the same file from unpkg.
+Use <code>https://unpkg.com/cookies-utils/dist/cookies-utils.min.js</code> as the script source to load it from unpkg.
 
-## Usage
+## Quick start
 
-```javascript
+~~~ts
 import { cookies } from "cookies-utils";
 
-await cookies.set("session", "abc", { secure: true, sameSite: "lax" });
+await cookies.set("theme", "dark", {
+  secure: true,
+  sameSite: "lax",
+});
 
-const value = await cookies.get("session"); // "abc" or undefined
-const exists = await cookies.has("session"); // boolean
-const all = await cookies.getAll(); // Cookie[]
-const sessions = await cookies.getAll("session"); // Cookie[]
+const theme = await cookies.get("theme");
+await cookies.delete("theme");
+~~~
 
-await cookies.delete("session");
-```
+The API can also be imported by name:
 
-Named imports behave the same way and tree shake:
-
-```javascript
+~~~ts
 import { get, set } from "cookies-utils";
-```
 
-### Common cookie patterns
+await set("theme", "dark");
+const theme = await get("theme");
+~~~
 
-Cross-site cookies require `SameSite=None` and `Secure`:
+## Comparison
 
-```javascript
+| Capability | <code>cookies-utils</code> | <code>js-cookie</code> | Native <code>cookieStore</code> | <code>document.cookie</code> |
+| --- | --- | --- | --- | --- |
+| API model | Promise-based | Synchronous | Promise-based | Synchronous string |
+| Native Cookie Store | Uses it when available | No | Yes | No |
+| Legacy fallback | Automatic <code>document.cookie</code> fallback | Uses <code>document.cookie</code> | None | N/A |
+| Read same-name cookies | <code>getAll(name)</code> returns readable matches | No dedicated same-name list method | <code>getAll()</code> supports filtering | Caller parses the cookie string |
+| Change events | Window events when the native API supports them | No built-in change event | Native Window change events | None |
+| Runtime option validation | Yes | No shared validation contract | Browser validates options | Browser parses the cookie string |
+| Error contract | <code>CookieError</code> for validation and detectable failures | No shared <code>CookieError</code> contract | Browser errors | Writes can fail silently |
+| TypeScript | Included declarations | Community types through <code>@types/js-cookie</code> | DOM types | DOM types |
+| Runtime dependencies | None | None | N/A | N/A |
+
+Cookie behavior still depends on browser capabilities. The library shares an API and defaults across backends, but cannot make browser behavior identical.
+
+## API
+
+| Method | Result | Description |
+| --- | --- | --- |
+| <code>cookies.get(name)</code> | <code>Promise&lt;string &#124; undefined&gt;</code> | Returns one matching value, or <code>undefined</code>. |
+| <code>cookies.getAll(name?)</code> | <code>Promise&lt;Cookie[]&gt;</code> | Lists readable cookies, optionally filtered by name. |
+| <code>cookies.has(name)</code> | <code>Promise&lt;boolean&gt;</code> | Reports whether a readable cookie with that name exists. |
+| <code>cookies.set(name, value, options?)</code> | <code>Promise&lt;void&gt;</code> | Validates and writes a cookie. |
+| <code>cookies.delete(name, options?)</code> | <code>Promise&lt;void&gt;</code> | Expires a cookie with the requested scope. |
+| <code>cookies.onChange(handler)</code> | Unsubscribe function | Subscribes to native Window change events when supported. |
+
+The named exports behave the same way. The package also exports the <code>Cookie</code>, <code>CookieAttributes</code>, <code>DeleteOptions</code>, <code>CookieChange</code>, and <code>CookieErrorCode</code> types, plus the <code>CookieError</code> class and <code>onChange</code> function.
+
+## Behavior and guarantees
+
+### Defaults and scope
+
+<code>set</code> defaults <code>path</code> to <code>/</code> and <code>sameSite</code> to <code>lax</code>. <code>delete</code> defaults <code>path</code> to <code>/</code>, so a bare delete targets a bare set written by this package.
+
+Cookies with the same name can exist at different paths or domains, and browsers can also partition them. <code>get(name)</code> returns one match. Use <code>getAll(name)</code> when every readable match matters. The API cannot select a particular duplicate by path or domain when reading.
+
+Delete a cookie using the same path and domain used when it was created. A scope mismatch is a silent no-op because deletion writes an expired cookie at that scope.
+
+### Options
+
+| Option | Type | Used by | Default and behavior |
+| --- | --- | --- | --- |
+| <code>path</code> | <code>string</code> | <code>set</code>, <code>delete</code> | <code>/</code>. An explicit path must be non-empty and start with <code>/</code>. |
+| <code>domain</code> | <code>string</code> | <code>set</code>, <code>delete</code> | None. The library checks syntax; the browser decides whether it matches the current origin. |
+| <code>expires</code> | <code>Date&#124;number</code> | <code>set</code> | Absolute expiration as a Date or Unix time in milliseconds within the JavaScript Date range. Cannot be combined with <code>maxAge</code>. |
+| <code>maxAge</code> | <code>number</code> | <code>set</code> | Relative expiration in seconds. Must be an integer. Positive values must fit within the supported JavaScript Date range; zero or a negative value expires the cookie immediately. Cookie Store writes convert it to an absolute expiry. |
+| <code>secure</code> | <code>boolean</code> | <code>set</code> | None. The native Cookie Store backend always writes Secure cookies and rejects <code>secure: false</code> as unsupported. |
+| <code>sameSite</code> | <code>"strict" &#124; "lax" &#124; "none"</code> | <code>set</code> | <code>lax</code>. <code>none</code> requires <code>secure: true</code>. |
+| <code>partitioned</code> | <code>boolean</code> | <code>set</code>, <code>delete</code> | None. A partitioned cookie requires <code>secure: true</code> when set. Pass <code>partitioned: true</code> when deleting it. |
+
+The encoded name and value pair must fit within 4096 bytes. UTF-8 path and domain values must each fit within 1024 bytes.
+
+The package validates <code>__Secure-</code> and <code>__Host-</code> prefix requirements before writing. It rejects <code>__Http-</code> and <code>__Host-Http-</code> names because browser JavaScript cannot create the required <code>HttpOnly</code> cookies.
+
+### Errors and environment support
+
+Validation failures use <code>CookieError</code> before a browser write. Exceptions thrown by a backend operation are wrapped as <code>CookieError</code> with code <code>OPERATION_FAILED</code> and the original exception in <code>cause</code>. Browsers may silently ignore invalid <code>document.cookie</code> writes without throwing, so those failures cannot be reported.
+
+| Code | Meaning |
+| --- | --- |
+| <code>INVALID_NAME</code> | The name is empty, not a string, contains control characters or malformed Unicode, or exceeds its encoded size limit. |
+| <code>INVALID_VALUE</code> | The value is not a string or contains malformed Unicode. |
+| <code>INVALID_OPTIONS</code> | An option has the wrong type, conflicts with another option, or has an invalid value. |
+| <code>UNSUPPORTED</code> | The selected backend cannot perform the requested operation. |
+| <code>NO_COOKIE_ACCESS</code> | Neither Cookie Store nor a cookie-capable <code>document</code> is available. |
+| <code>OPERATION_FAILED</code> | Cookie Store access or a browser backend operation threw an error. |
+
+Importing the package is safe during server-side rendering. Cookie operations reject with <code>NO_COOKIE_ACCESS</code> when no browser cookie API exists. Change subscriptions are not available during server rendering.
+
+There is no <code>deleteAllCookies()</code> method. The <code>document.cookie</code> fallback cannot report each cookie's path or domain, and those fields are not reliably available across Cookie Store implementations. JavaScript also cannot access <code>HttpOnly</code> cookies. Keep the names and scopes your application creates, then delete those explicitly.
+
+## Common cookie patterns
+
+Cookies used in cross-site embedded or subresource requests require <code>SameSite=None</code> and <code>Secure</code>:
+
+~~~ts
 await cookies.set("widget", "enabled", {
   sameSite: "none",
   secure: true,
 });
-```
+~~~
 
-A `__Host-` cookie must be Secure, host only, and scoped to `/`:
+A <code>__Host-</code> cookie must be Secure, have no Domain attribute, and use the root path:
 
-```javascript
+~~~ts
 await cookies.set("__Host-session-hint", "1", {
   secure: true,
   path: "/",
 });
-```
+~~~
 
 Partitioned cookies also require Secure:
 
-```javascript
+~~~ts
 await cookies.set("__Host-widget", "enabled", {
   secure: true,
   sameSite: "none",
   partitioned: true,
   path: "/",
 });
-```
+~~~
 
-Delete with the same scope used to create the cookie:
+Delete using the same scope that was used to set the cookie:
 
-```javascript
+~~~ts
 await cookies.delete("preferences", {
   path: "/account",
 });
-```
+~~~
 
-Cookies with the same name can exist at different paths, domains or partitions.
-Use `getAll(name)` when the caller needs every readable matching cookie.
-
-See [SECURITY.md](SECURITY.md) for cookie security limits and safe reporting.
+See [SECURITY.md](SECURITY.md) for cookie security limits and release verification.
 
 ## Cookie change events
 
-In a Window with native Cookie Store change events, `cookies.onChange()` passes
-normalized cookie data to the handler and returns an unsubscribe function:
+In a Window with native Cookie Store change events, <code>cookies.onChange()</code> passes changed cookies with names and values, and deleted cookies with names only. It returns an unsubscribe function. The event data has no path or domain fields. Replacing a cookie can appear as a changed record without a separate deleted record.
 
-```javascript
+~~~ts
 const unsubscribe = cookies.onChange(({ changed, deleted }) => {
   for (const cookie of changed) console.log(cookie.name, cookie.value);
   for (const cookie of deleted) console.log(cookie.name, "deleted");
 });
 
 unsubscribe();
-```
+~~~
 
-The named `onChange` export behaves the same way. The document-cookie fallback,
-server environments and service workers do not provide this Window event API;
-`onChange()` throws `CookieError` with code `UNSUPPORTED` there. The library does
-not poll `document.cookie`. Native event records expose cookie names and values
-only. Deleted entries omit the value because the browser does not provide it;
-neither changed nor deleted entries include scope attributes such as path or
-domain. A replacement may appear as a changed cookie without a separate deleted
-entry. The library reports the browser's change records without inventing
-missing cookie attributes.
+The <code>document.cookie</code> fallback, server environments, and service workers do not provide this Window event API. <code>onChange()</code> throws <code>CookieError</code> with code <code>UNSUPPORTED</code> there. The library does not poll <code>document.cookie</code>.
 
 ## Browser support
 
-| Backend | Used when | Attributes readable |
+The library selects a backend for each call.
+
+| Backend | Used when | Readable cookie fields |
 | --- | --- | --- |
-| Cookie Store API | `cookieStore` exists, unless the origin is non-https and there is a `document` that can carry cookies (see WebKit note below) | Chromium: the full record (`path`, `domain`, `expires`, `secure`, `sameSite`, `partitioned`). Firefox and WebKit: name and value only, see below |
-| `document.cookie` | any non-https origin with a `document` that can carry cookies, or wherever `cookieStore` is unavailable | no, name and value only |
+| Cookie Store | <code>cookieStore</code> is available, except on a non-HTTPS page with a cookie-capable <code>document</code> | <code>name</code> and <code>value</code> are guaranteed by the API. Browsers may expose additional attributes. |
+| <code>document.cookie</code> | Cookie Store is unavailable, or the page is non-HTTPS and can carry cookies | <code>name</code> and <code>value</code> only. |
 
-The Cookie Store API reached Baseline in June 2025; caniuse reports it as
-supported from Safari 18.4 and Firefox 140. The library picks a backend per
-call, so no configuration is needed.
+The real browser test suite runs against Chromium, Firefox, and WebKit. It exercises core operations through native Cookie Store and the <code>document.cookie</code> fallback. Browser-specific support for additional cookie attributes and partitioning can vary.
 
-`getAll()`'s attribute reporting is Chromium-only today, even though all
-three engines expose a native `CookieStore`. Firefox's and WebKit's own
-implementations report only `{ name, value }` from `get()` and `getAll()`,
-with no `path`, `domain`, `expires`, `secure` or `sameSite`. This was
-established by driving each backend directly in the real browser suite,
-against the Cookie Store objects Chromium, Firefox and WebKit each provide
-themselves, not by reading their documentation.
+Cookie Store standardizes the cookie name and value fields; additional metadata is optional and may differ by browser. Treat fields such as path, domain, expiry, Secure, SameSite, and partitioning as optional when reading a <code>Cookie</code>. The fallback can report only names and values.
 
-One divergence cannot be removed. `CookieStore.set()` has no `secure` option
-because it only runs in secure contexts, so a cookie written through it is always
-Secure, while the same call through `document.cookie` produces a non-Secure
-cookie unless you pass `secure: true`. Passing `secure: false` on the Cookie Store
-backend rejects with `CookieError` code `UNSUPPORTED` rather than silently
-ignoring you.
+On a non-HTTPS page with a cookie-capable <code>document</code>, the library selects <code>document.cookie</code> even if Cookie Store is present. This avoids a persistence issue observed in WebKit on plain HTTP origins. On HTTPS pages, Cookie Store is selected when available. A Cookie Store write is Secure by construction, so <code>secure: false</code> is unsupported on that backend.
 
-### WebKit on plain http origins
+## Security and release integrity
 
-Playwright's WebKit build does not persist a write made through
-`cookieStore.set()` on a plain http origin, even though `isSecureContext`
-reports true there; the same write works correctly over https. That build is
-not the shipping Safari browser, so Safari is very likely affected the same
-way, though not certainly so. The library therefore
-prefers `document.cookie` on any non-https origin regardless of which backend
-would otherwise be picked, so this is handled rather than merely disclosed,
-and production sites on https are unaffected either way. The real browser
-suite is served over https and runs on Chromium, Firefox and WebKit: all
-three ship a `CookieStore` today, all three exercise it in CI, and all three
-pass.
+This package reads and writes browser cookies. It is not an authentication system and does not make client-readable values safe to trust. Releases from the current publishing workflow include npm provenance and artifacts for independent verification. See [SECURITY.md](SECURITY.md).
 
-## Migrating from 1.0.0
+## Migrating from 1.x
 
-Every function is now async and takes positional arguments.
+Version 2 is a breaking redesign. The API is asynchronous, the default path is <code>/</code>, and values returned by <code>get</code> are decoded. Read the [1.0.0 to 2.x migration guide](MIGRATION.md) before upgrading.
 
-| 1.0.0 | 2.0.0 |
-| --- | --- |
-| `getCookieValue(name)` | `await get(name)` |
-| `setCookie({ name, value, ...opts })` | `await set(name, value, opts)` |
-| `cookieExists(name)` | `await has(name)` |
-| `cookieHasValue(name, value)` | closest equivalent: `(await get(name)) === value` |
-| `deleteCookie(name, path, domain)` | `await cookies.delete(name, { path, domain })` |
-| `deleteAllCookies()` | removed |
+## Contributing
 
-`cookieHasValue` is the one row that is not an exact swap, only the closest
-equivalent. It compared the raw header text after trimming, so it matched percent
-encoded values and ignored surrounding whitespace. `await get(name)` returns the
-decoded value and compares exactly. That is a deliberate correction, not a
-like for like replacement.
+Use [GitHub Issues](https://github.com/hamzahamidi/cookies-utils/issues) for bug reports, enhancement requests, and feedback. See [CONTRIBUTING.md](CONTRIBUTING.md) to propose a change and run the project checks. Report suspected security vulnerabilities through [SECURITY.md](SECURITY.md), not a public issue.
 
-The rest of this section covers what the table above does not: a decoding
-trap almost every 1.0.0 call site hits, two default attributes that change
-what a caller sends without changing the call site, a list of inputs 1.0.0
-tolerated that 2.0.0 now rejects, and a reference for the options and error
-codes.
-
-### The default path can shadow a 1.0.0 cookie
-
-1.0.0's `setCookie` wrote no `path` when the caller omitted one, so those
-cookies live at the writing page's directory, for example `/app`; 2.0.0
-defaults `path` to `"/"`. After upgrading, `set(name, value)` writes a new
-cookie at `/` while the 1.0.0 cookie stays at `/app`, and since
-`document.cookie` lists the more specific path first, `get()` returns the
-first match it finds there and keeps reporting the stale `/app` value with no
-error, while `delete(name)` now targets `/` and never clears the old one.
-Delete the old cookie at its original path before or during the upgrade:
-`await cookies.delete("session", { path: "/app" })`.
-
-### The default SameSite changes cross-site behavior
-
-1.0.0 serialized `sameSite` as `'; samesite' + value` with no `=`, so
-browsers discarded the attribute and no cookie 1.0.0 ever wrote carried a
-SameSite value, whatever the caller passed. 2.0.0 writes an explicit
-`SameSite=Lax` by default, which is never looser than an implicit default, so
-the only realistic breakage is a cookie that used to be sent on a cross-site
-request and now is not: a cross-site subresource or credentialed
-cross-origin fetch, or a top-level cross-site POST returning to the site
-(SAML or a payment provider return), which loses Chromium's
-Lax-allowing-unsafe grace period. There is no way to write a cookie with no
-SameSite attribute at all, since the default always applies; for cross-site
-use, pass `sameSite: "none"` with `secure: true`.
-
-### Delete your own decodeURIComponent call
-
-1.0.0's `setCookie` percent-encoded a value on write, and `getCookieValue`
-never decoded on read. Working 1.0.0 code very often reads:
-
-```javascript
-const value = decodeURIComponent(getCookieValue("session"));
-```
-
-`get()` in 2.0.0 already decodes the value it reads, leniently: a foreign
-cookie holding a lone `%` comes back unchanged rather than throwing. Carrying
-the same wrapper over now decodes twice:
-
-```javascript
-// Wrong after migrating: get() already decoded this once.
-const value = decodeURIComponent(await get("session"));
-```
-
-A value containing a literal percent sequence is mangled by the second
-decode, and a value ending in a lone `%` throws `URIError: URI malformed`,
-from your own wrapper rather than from this library. Delete the wrapper:
-
-```javascript
-const value = await get("session");
-```
-
-### Inputs 1.0.0 tolerated that 2.0.0 rejects
-
-`set()` throws `CookieError` instead of writing a cookie 1.0.0 would have
-written, for:
-
-- a value that is not a string, for example `set("a", 123)`
-- `maxAge` and `expires` supplied together
-- `sameSite: "none"` without `secure: true`
-- a `sameSite` value that is not exactly `"strict"`, `"lax"` or `"none"`,
-  for example the capitalized `"Lax"`
-- a `maxAge` that is not an integer
-- a `__Secure-` prefixed name without `secure: true`
-- a `__Host-` prefixed name without `secure: true`, with a `domain`, or
-  (only if you pass an explicit `path` other than `"/"`) with any other path;
-  `path` defaults to `"/"`, so `set("__Host-a", "b", { secure: true })`
-  already satisfies the path rule on its own
-- `partitioned: true` without `secure: true`
-- a `path` or `domain` containing a semicolon or a control character
-- an option whose runtime type is wrong, an empty or relative path, or an
-  obviously malformed domain
-- an encoded name and value pair over 4096 bytes, or a UTF-8 path or domain
-  over 1024 bytes
-- a write or delete using `__Http-` or `__Host-Http-`, since those prefixes
-  require `HttpOnly` and must be set by a server using `Set-Cookie`
-
-Anything your 1.0.0 code relied on being silently tolerated in this list now
-gets a rejection, before anything is written. See the error reference below
-for which `CookieErrorCode` each case throws.
-
-`get("")` and `has("")` changed too, on the read side, and so did a
-non-string name: `get(123)` was silently coerced to text before the match in
-1.0.0. 1.0.0-equivalent code that looked up an empty name got back
-`undefined` or `false`. Both now reject with `INVALID_NAME`, along with every
-other empty, non-string or control-character name.
-
-### Options and error reference
-
-| Option | Type | Used by | Meaning |
-| --- | --- | --- | --- |
-| `path` | `string` | `set`, `delete` | Cookie path scope. Defaults to `"/"` when omitted, so a bare `set(name, value)` and a bare `delete(name)` target the same cookie. |
-| `domain` | `string` | `set`, `delete` | Cookie domain scope. No default. |
-| `expires` | `Date \| number` | `set` | Absolute expiry, as a `Date` or Unix time in milliseconds within the JavaScript Date range. Cannot be combined with `maxAge`. |
-| `maxAge` | `number` | `set` | Relative expiry in seconds. Zero or negative expires the cookie immediately. Must be an integer that fits the JavaScript Date range. Cannot be combined with `expires`. |
-| `secure` | `boolean` | `set` | Sends the cookie only over https. No default: the Cookie Store backend always writes a Secure cookie and rejects `secure: false` with `UNSUPPORTED`. |
-| `sameSite` | `"strict" \| "lax" \| "none"` | `set` | Cross-site sending policy, lowercase only. Defaults to `"lax"` when omitted. `"none"` requires `secure: true`. |
-| `partitioned` | `boolean` | `set`, `delete` | CHIPS partitioned storage. On `set()`, requires `secure: true`. On `delete()` the expiry write asserts `Secure` for you: CHIPS requires a Partitioned cookie to be Secure, and a browser discards a write carrying `Partitioned` without it, which would leave the cookie in place. |
-
-`delete()` defaulting `path` to `"/"` means a bare `delete(name)` matches a
-bare `set(name, value)` without either call naming a path. A `path` or
-`domain` that does not match the cookie's own is still a silent no-op:
-deletion works by writing an already-expired cookie, and the browser only
-overwrites a cookie whose path and domain match. That still applies whenever
-`set()` used a non-default `path` or any `domain`, so a `delete()` for that
-cookie has to name the same ones.
-
-| `CookieErrorCode` | Thrown when |
-| --- | --- |
-| `INVALID_NAME` | the name is empty, not a string, contains a control character or malformed Unicode, or its encoded size exceeds the cookie limit |
-| `INVALID_VALUE` | the value passed to `set()` is not a string or contains malformed Unicode |
-| `INVALID_OPTIONS` | an option has the wrong runtime type, attributes conflict, an expiry is outside the JavaScript Date range, a path or domain is malformed or exceeds its byte limit, or the encoded name and value exceed 4096 bytes |
-| `UNSUPPORTED` | the selected backend cannot perform the request, for example `secure: false` on the Cookie Store backend or change events without native Window support |
-| `NO_COOKIE_ACCESS` | neither `cookieStore` nor `document` exists in this environment |
-| `OPERATION_FAILED` | a browser backend operation fails; the original exception is available as `cause` |
-
-`maxAge` remains supported consistently across both backends. Cookie Store
-writes convert it to an absolute `expires` value until native `maxAge` behavior
-matches the `document.cookie` fallback in the supported browsers.
-
-`deleteAllCookies()` was removed rather than fixed. It could not read the path or
-domain of anything it found and could not see `HttpOnly` cookies, so it under
-deleted silently in exactly the logout flows that used it. There is no direct
-replacement: delete your own known cookie names, which an application has by
-definition, rather than routing them back through `getAll()`:
-
-```javascript
-for (const name of ["session", "csrf-token"]) {
-  await cookies.delete(name, { path: "/" });
-}
-```
-
-There is no general purge, for two independent reasons. First, the
-`document.cookie` backend cannot read the path of a cookie it finds, so a name
-read from `getAll()` carries no path to delete it with. Second, `getAll()`
-returns decoded names, and encoding a decoded name does not always reproduce the
-wire name it came from: `decode("100%")` returns `"100%"` (the lone `%` is not a
-valid escape, so decoding leaves it alone) while `encode("100%")` returns
-`"100%25"`. A name read back from `getAll()` and passed to `delete` can
-therefore target a different wire name than the one you read. Keep your own list
-of names instead of deriving one from `getAll()`.
+See [ROADMAP.md](ROADMAP.md) for the project direction.

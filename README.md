@@ -5,44 +5,46 @@
         <img src="https://img.shields.io/npm/v/cookies-utils.svg?style=flat-square&colorB=51C838" alt="NPM Version">
     </a>
     <a href="https://codecov.io/gh/hamzahamidi/cookies-utils">
-        <img src="https://codecov.io/gh/hamzahamidi/cookies-utils/branch/main/graph/badge.svg?token=KST9RPYZYI"/>
+        <img src="https://codecov.io/gh/hamzahamidi/cookies-utils/branch/main/graph/badge.svg?token=KST9RPYZYI" alt="Coverage">
     </a>
     <a href="https://github.com/hamzahamidi/cookies-utils/actions?query=workflow%3ABuild">
         <img src="https://github.com/hamzahamidi/cookies-utils/workflows/Build/badge.svg" alt="Build Status">
     </a>
+    <a href="https://scorecard.dev/viewer/?uri=github.com/hamzahamidi/cookies-utils">
+        <img src="https://api.scorecard.dev/projects/github.com/hamzahamidi/cookies-utils/badge" alt="OpenSSF Scorecard">
+    </a>
+    <a href="https://github.com/hamzahamidi/cookies-utils/blob/main/LICENSE">
+        <img src="https://img.shields.io/npm/l/cookies-utils.svg?style=flat-square" alt="MIT License">
+    </a>
 </p>
 
-A safe, typed Cookie Store API with a `document.cookie` fallback.
+A typed, promise-based cookie API. It uses the native Cookie Store API when available and falls back to `document.cookie`.
 
-- One async API over both backends, chosen per call with nothing to configure
-- SSR-safe imports: importing never reads `document` or `cookieStore`
-- Normalized behaviour across backends: the same defaults and the same
-  validation either way, and the one divergence that cannot be removed is
-  documented rather than hidden
-- Validation for `SameSite`, `Secure`, `Partitioned` (CHIPS), the `__Secure-`,
-  `__Host-`, `__Http-` and `__Host-Http-` prefixes, `Path`, `Domain`, `Expires`
-  and `Max-Age`, including runtime values from JavaScript callers
-- Zero runtime dependencies, about 3.3 kB gzipped, within a 4,096-byte CI budget
-- ESM, CommonJS and TypeScript declarations, with tree-shakable named exports
+- One promise-based API across both backends, selected per operation.
+- Shared defaults, runtime validation and typed errors for browser failures that throw.
+- SSR-safe imports and native Window change events where supported.
+- Zero runtime dependencies, ESM, CommonJS and TypeScript declarations. The browser build is about 3.3 kB gzipped, within a 4,096-byte CI budget.
 
 ## Why cookies-utils?
 
-The Cookie Store API is the modern way to work with cookies: promise based,
-reachable from a service worker, and able to report a cookie's attributes rather
-than one flat string. What it is not is uniformly available or uniformly
-implemented.
+Most cookie helpers wrap synchronous `document.cookie`. Native Cookie Store
+offers an asynchronous API and richer cookie data, but browser support and
+behavior still differ. `cookies-utils` gives browser code one API across both,
+normalizes behavior where possible and documents differences it cannot hide.
 
-Use this package when browser code needs one promise-based API across native
-Cookie Store and `document.cookie`, with shared defaults, validation and typed
-errors. It chooses a backend per call and reports differences it cannot remove
-under [Browser support](#browser-support).
+| Choose | When it fits |
+| --- | --- |
+| `cookies-utils` | You want one async API with native Cookie Store where available, a `document.cookie` fallback, runtime validation and explicit compatibility behavior. |
+| [`js-cookie`](https://github.com/js-cookie/js-cookie) | You want a mature, synchronous `document.cookie` helper and do not need Cookie Store semantics. |
+| Native [`cookieStore`](https://cookiestore.spec.whatwg.org/) | Every supported browser provides it and direct browser behavior is useful. |
+| `document.cookie` | A simple synchronous browser interface is enough. |
 
-Choose [js-cookie](https://github.com/js-cookie/js-cookie) when a synchronous
-`document.cookie` helper fits better. Use the native
-[`cookieStore`](https://cookiestore.spec.whatwg.org/) API directly when every
-target browser supports it and raw browser behavior is useful. Choose a
-Cookie Store polyfill or ponyfill when you need that API shape in an unsupported
-browser and are willing to take on the package's own compatibility behavior.
+Use a Cookie Store polyfill or ponyfill when you need that API shape in
+unsupported browsers and prefer the selected project's compatibility model.
+See its documentation before relying on its fallback behavior.
+
+<details>
+<summary>Detailed behavior comparison</summary>
 
 | Approach | Async | Native Cookie Store | Fallback | Changes a browser global | TypeScript | CHIPS | Prefix checks |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -50,7 +52,6 @@ browser and are willing to take on the package's own compatibility behavior.
 | `document.cookie` | No | No | Native API | No | DOM type only | Browser accepts supported attributes in the cookie string | Browser rules only |
 | `js-cookie` | No | No | Uses `document.cookie` directly | UMD build exposes `Cookies`; does not patch `cookieStore` | `@types/js-cookie` | Accepts the `partitioned` attribute | Browser rules only |
 | Native `cookieStore` | Yes | Yes | No | Supplied by the browser | DOM library types | Browser support | Browser rules |
-| Cookie Store polyfill or ponyfill | Usually | Emulates it where needed | Package specific | Polyfills may install a global; ponyfills are imported | Package specific | Package specific | Package specific |
 
 | Approach | SSR safe import | Error normalization | Runtime dependencies |
 | --- | --- | --- | --- |
@@ -58,13 +59,8 @@ browser and are willing to take on the package's own compatibility behavior.
 | `document.cookie` | Guard access to `document` | No shared error model; writes may fail silently | None |
 | `js-cookie` | Module import is safe; cookie operations need `document` | No shared `CookieError` contract | None |
 | Native `cookieStore` | Guard access to the browser global | Native browser errors | None |
-| Cookie Store polyfill or ponyfill | Package specific | Package specific | Package specific |
 
-The polyfill row varies by package and version. For example, the
-[`cookie-store` project](https://github.com/markcellus/cookie-store) describes
-an imported ponyfill, while other packages install a global. Read the selected
-package's documentation before relying on its fallback, types or security
-checks.
+</details>
 
 See [ROADMAP.md](ROADMAP.md) for where the library is heading.
 
@@ -95,6 +91,9 @@ while selecting or calling either backend reject with `CookieError` code
 without throwing; those cases cannot be normalized.
 
 ## Installation
+
+The current npm release was published from GitHub Actions through npm trusted
+publishing and includes a verifiable [provenance attestation](https://www.npmjs.com/package/cookies-utils?activeTab=provenance).
 
 Install from npm with `npm install cookies-utils`, or load the browser build from
 jsDelivr or unpkg for a `cookiesUtils` global:

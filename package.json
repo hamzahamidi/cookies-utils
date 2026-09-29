@@ -1,7 +1,7 @@
 {
   "name": "cookies-utils",
   "version": "0.0.0-development",
-  "description": "A tiny, typed cookie API that uses the Cookie Store API when available and falls back safely to document.cookie",
+  "description": "A typed, promise-based cookie API using native Cookie Store when available and falling back to document.cookie",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -69,6 +69,8 @@
     "@vitest/browser": "^4.1.11",
     "@vitest/browser-playwright": "^4.1.11",
     "@vitest/coverage-v8": "^4.1.11",
+    "fast-check": "^4.10.2",
+    "npm": "11.20.0",
     "playwright": "^1.62.1",
     "rollup": "^4.62.5",
     "semantic-release": "^24.2.9",
@@ -78,7 +80,6 @@
     "vitest": "^4.1.11"
   },
   "overrides": {
-    "npm": "^12.0.0",
     "@semantic-release/npm": "^13.1.2"
   }
 }

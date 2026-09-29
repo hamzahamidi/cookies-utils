@@ -1,16 +1,35 @@
 version: 2
+
+multi-ecosystem-groups:
+  routine:
+    schedule:
+      interval: weekly
+
 updates:
   - package-ecosystem: npm
     directory: /
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: build(deps)
-    open-pull-requests-limit: 10
+    patterns: ["*"]
+    multi-ecosystem-group: routine
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: ci(deps)
-    open-pull-requests-limit: 10
+    patterns: ["*"]
+    multi-ecosystem-group: routine
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    groups:
+      actions-security:
+        applies-to: security-updates
+        patterns: ["*"]

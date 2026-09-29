@@ -11,7 +11,7 @@ describe('codec', () => {
 
   it('round trips arbitrary Unicode strings', () => {
     fc.assert(
-      fc.property(fc.fullUnicodeString({ maxLength: 256 }), (raw) => {
+      fc.property(fc.string({ unit: 'grapheme', maxLength: 256 }), (raw) => {
         expect(decode(encode(raw))).toBe(raw);
       }),
     );

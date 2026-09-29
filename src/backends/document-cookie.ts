@@ -1,5 +1,6 @@
 import { parse } from '../parse';
 import { serialize } from '../serialize';
+import { operationFailed } from '../errors';
 import type { Backend, Cookie, DeleteOptions, NormalizedAttributes } from '../types';
 
 /** The slice of Document this backend needs, injectable so tests can observe writes. */
@@ -13,8 +14,15 @@ export interface CookieTarget {
  * script through this API.
  */
 export function createDocumentCookieBackend(target: CookieTarget): Backend {
-  const readAll = (): Cookie[] =>
-    parse(target.cookie).map((pair) => ({ name: pair.name, value: pair.value }));
+  const readAll = (): Cookie[] => {
+    let cookieHeader: string;
+    try {
+      cookieHeader = target.cookie;
+    } catch (cause) {
+      throw operationFailed('read', cause);
+    }
+    return parse(cookieHeader).map((pair) => ({ name: pair.name, value: pair.value }));
+  };
 
   return {
     async get(name: string): Promise<Cookie | undefined> {
@@ -26,7 +34,12 @@ export function createDocumentCookieBackend(target: CookieTarget): Backend {
     },
 
     async set(name: string, value: string, attributes: NormalizedAttributes): Promise<void> {
-      target.cookie = serialize(name, value, attributes);
+      const cookie = serialize(name, value, attributes);
+      try {
+        target.cookie = cookie;
+      } catch (cause) {
+        throw operationFailed('set', cause);
+      }
     },
 
     async delete(name: string, options: DeleteOptions): Promise<void> {
@@ -35,7 +48,12 @@ export function createDocumentCookieBackend(target: CookieTarget): Backend {
       // write carrying Partitioned without it. Deletion works by overwriting with
       // an expired cookie, so a discarded write leaves the cookie in place.
       if (options.partitioned === true) attributes.secure = true;
-      target.cookie = serialize(name, '', attributes);
+      const cookie = serialize(name, '', attributes);
+      try {
+        target.cookie = cookie;
+      } catch (cause) {
+        throw operationFailed('delete', cause);
+      }
     },
   };
 }

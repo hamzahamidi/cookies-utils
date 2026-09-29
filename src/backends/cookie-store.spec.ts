@@ -95,6 +95,18 @@ describe('Cookie Store backend', () => {
     ]);
   });
 
+  it('preserves cookies with a duplicate name', async () => {
+    const store = new FakeCookieStore([
+      { name: 'theme', value: 'light', path: '/' },
+      { name: 'theme', value: 'dark', path: '/account' },
+    ]);
+    const backend = createCookieStoreBackend(store);
+    expect(await backend.getAll()).toEqual([
+      { name: 'theme', value: 'light', path: '/' },
+      { name: 'theme', value: 'dark', path: '/account' },
+    ]);
+  });
+
   it('forwards the options the Cookie Store API accepts', async () => {
     freezeClock();
     const store = new FakeCookieStore();
@@ -119,7 +131,7 @@ describe('Cookie Store backend', () => {
     expect(store.setCalls).toEqual([{ name: 'a', value: '1', domain: 'example.com', expires: 42 }]);
   });
 
-  it('converts maxAge to expires, the only one of the two CookieInit specifies', async () => {
+  it('converts maxAge to expires while native behavior lacks backend parity', async () => {
     freezeClock();
     const store = new FakeCookieStore();
     const backend = createCookieStoreBackend(store);
@@ -127,7 +139,7 @@ describe('Cookie Store backend', () => {
     expect(store.setCalls).toEqual([{ name: 'a', value: '1', expires: FIXED_NOW + 90_000 }]);
   });
 
-  it('never sends maxAge, which WebIDL would drop in silence into a session cookie', async () => {
+  it('keeps maxAge out of CookieStore.set while the compatibility conversion is active', async () => {
     freezeClock();
     const store = new FakeCookieStore();
     const backend = createCookieStoreBackend(store);
@@ -177,5 +189,30 @@ describe('Cookie Store backend', () => {
     const backend = createCookieStoreBackend(store);
     await backend.delete('a', { partitioned: true });
     expect(store.deleteCalls).toEqual([{ name: 'a', partitioned: true }]);
+  });
+
+  it('normalizes Cookie Store failures and retains their causes', async () => {
+    const cause = new TypeError('native failure');
+    const backend = createCookieStoreBackend({
+      async get() { throw cause; },
+      async getAll() { throw cause; },
+      async set() { throw cause; },
+      async delete() { throw cause; },
+    });
+
+    for (const operation of [
+      () => backend.get('a'),
+      () => backend.getAll(),
+      () => backend.set('a', 'b', {}),
+      () => backend.delete('a', {}),
+    ]) {
+      try {
+        await operation();
+        throw new Error('Expected the backend operation to reject.');
+      } catch (error) {
+        expect(error).toMatchObject({ name: 'CookieError', code: 'OPERATION_FAILED' });
+        expect((error as CookieError).cause).toBe(cause);
+      }
+    }
   });
 });

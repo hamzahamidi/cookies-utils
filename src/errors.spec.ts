@@ -14,4 +14,11 @@ describe('CookieError', () => {
     expect(error instanceof Error).toBe(true);
     expect(error instanceof CookieError).toBe(true);
   });
+
+  it('preserves an original backend failure as cause', () => {
+    const cause = new TypeError('browser rejection');
+    const error = new CookieError('OPERATION_FAILED', 'Failed to set cookie.', { cause });
+    expect(error.code).toBe('OPERATION_FAILED');
+    expect(error.cause).toBe(cause);
+  });
 });

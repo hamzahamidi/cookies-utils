@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { CookieError } from '../errors';
 import { createDocumentCookieBackend, type CookieTarget } from './document-cookie';
 
 /** Records writes instead of applying them, so attributes stay observable. */
@@ -52,6 +53,15 @@ describe('document.cookie backend', () => {
     ]);
   });
 
+  it('preserves cookies with a duplicate name', async () => {
+    target = new FakeTarget('theme=light; theme=dark');
+    const backend = createDocumentCookieBackend(target);
+    expect(await backend.getAll()).toEqual([
+      { name: 'theme', value: 'light' },
+      { name: 'theme', value: 'dark' },
+    ]);
+  });
+
   it('deletes with Max-Age zero, an epoch Expires and the given scope', async () => {
     const backend = createDocumentCookieBackend(target);
     await backend.delete('a', { path: '/app', domain: 'example.com' });
@@ -74,5 +84,27 @@ describe('document.cookie backend', () => {
     expect(target.writes).toEqual([
       'a=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/',
     ]);
+  });
+
+  it('normalizes document.cookie access failures and retains their causes', async () => {
+    const cause = new TypeError('native failure');
+    const backend = createDocumentCookieBackend({
+      get cookie() { throw cause; },
+      set cookie(_value: string) { throw cause; },
+    });
+
+    for (const operation of [
+      () => backend.getAll(),
+      () => backend.set('a', 'b', {}),
+      () => backend.delete('a', {}),
+    ]) {
+      try {
+        await operation();
+        throw new Error('Expected the backend operation to reject.');
+      } catch (error) {
+        expect(error).toMatchObject({ name: 'CookieError', code: 'OPERATION_FAILED' });
+        expect((error as CookieError).cause).toBe(cause);
+      }
+    }
   });
 });

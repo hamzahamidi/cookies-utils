@@ -64,6 +64,21 @@ describe('real browser conformance', () => {
     expect(await cookies.get('never-written')).toBeUndefined();
   });
 
+  it('filters getAll by name through the selected backend', async () => {
+    const otherName = `${NAME}-other`;
+    try {
+      await cookies.set(NAME, 'selected', { path: '/' });
+      await cookies.set(otherName, 'ignored', { path: '/' });
+      const matches = await cookies.getAll(NAME);
+      expect(matches.map(({ name, value }) => ({ name, value }))).toEqual([
+        { name: NAME, value: 'selected' },
+      ]);
+      expect(await cookies.getAll('missing-name')).toEqual([]);
+    } finally {
+      await cookies.delete(otherName, { path: '/' });
+    }
+  });
+
   it('returns CookieError for invalid runtime options and prefixes', async () => {
     const badPath = await cookies.set(NAME, 'x', { path: 12 } as never).then(
       () => 'accepted',

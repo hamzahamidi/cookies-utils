@@ -10,6 +10,9 @@
     <a href="https://github.com/hamzahamidi/cookies-utils/actions?query=workflow%3ABuild">
         <img src="https://github.com/hamzahamidi/cookies-utils/workflows/Build/badge.svg" alt="Build Status">
     </a>
+    <a href="https://scorecard.dev/viewer/?uri=github.com/hamzahamidi/cookies-utils">
+        <img src="https://api.scorecard.dev/projects/github.com/hamzahamidi/cookies-utils/badge" alt="OpenSSF Scorecard">
+    </a>
     <a href="https://github.com/hamzahamidi/cookies-utils/blob/main/LICENSE">
         <img src="https://img.shields.io/npm/l/cookies-utils.svg?style=flat-square" alt="MIT License">
     </a>

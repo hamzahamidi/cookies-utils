@@ -64,6 +64,10 @@ See its documentation before relying on its fallback behavior.
 
 See [ROADMAP.md](ROADMAP.md) for where the library is heading.
 
+## Contributing
+
+Use [GitHub Issues](https://github.com/hamzahamidi/cookies-utils/issues) for bug reports, enhancement requests, and general feedback. See [CONTRIBUTING.md](CONTRIBUTING.md) to propose a code or documentation change and run the relevant checks. Report suspected security vulnerabilities through [SECURITY.md](SECURITY.md), not a public issue.
+
 ## Two backends, one API
 
 `get`, `getAll`, `has`, `set` and `delete` all return promises: the Cookie Store

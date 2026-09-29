@@ -5,64 +5,58 @@ on:
     branches:
       - main
   pull_request:
-    branches:
-      - main
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
-# Two jobs rather than one, because they need different gating. The dry run has
-# to stay ungated or every pull request would wait on a human to learn whether
-# its configuration parses. The publish is gated, because a push to main
-# publishes to npm irreversibly: unpublishing is limited to a 24 hour window
-# and only while nothing depends on the version.
 jobs:
   dry-run:
     name: Dry run
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
-          cache: npm
-          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
       - run: npm ci
       - run: npm run build
-      # semantic-release's own isPr guard returns before verifyConditions and
-      # before the branch check in .releaserc.json, so on a pull request it
-      # exits before it ever reaches npm authentication. This catches
-      # configuration and plugin errors only. It does not prove that OIDC
-      # publishing works.
+      - run: npm run check:bundle
+      - run: npm run smoke
       - run: npx semantic-release --dry-run
 
   release:
     name: Release
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    # This name must exist as an environment with required reviewers under
-    # Settings, Environments. GitHub creates an unprotected environment on
-    # first use if it does not, which gates nothing at all.
+    # Required reviewers and deployment rules must be configured in repository settings.
     environment: npm-publish
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
-          cache: npm
+          package-manager-cache: false
           registry-url: https://registry.npmjs.org
-      # Node 22 ships npm 10, and Trusted Publishing needs npm 11.5.1 or later.
-      - run: npm install -g npm@latest
+      - run: npm install --global npm@11.5.1
       - run: npm ci
       - run: npm run build
+      - run: npm run check:bundle
+      - run: npm run smoke
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release

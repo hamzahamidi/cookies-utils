@@ -12,8 +12,7 @@
     </a>
 </p>
 
-A tiny, typed cookie API that uses the Cookie Store API when available and falls
-back safely to `document.cookie`.
+A safe, typed Cookie Store API with a `document.cookie` fallback.
 
 - One async API over both backends, chosen per call with nothing to configure
 - SSR-safe imports: importing never reads `document` or `cookieStore`
@@ -23,7 +22,7 @@ back safely to `document.cookie`.
 - Validation for `SameSite`, `Secure`, `Partitioned` (CHIPS), the `__Secure-`,
   `__Host-`, `__Http-` and `__Host-Http-` prefixes, `Path`, `Domain`, `Expires`
   and `Max-Age`, including runtime values from JavaScript callers
-- Zero runtime dependencies, 3,320 bytes gzipped
+- Zero runtime dependencies, about 3.3 kB gzipped, within a 4,096-byte CI budget
 - ESM, CommonJS and TypeScript declarations, with tree-shakable named exports
 
 ## Why cookies-utils?
@@ -33,11 +32,39 @@ reachable from a service worker, and able to report a cookie's attributes rather
 than one flat string. What it is not is uniformly available or uniformly
 implemented.
 
-This package lets you write against those semantics once. It selects a backend
-per call, applies the same defaults to both, and where the two genuinely differ
-it raises a typed error instead of quietly doing something else. Every difference
-it accounts for is listed under [Browser support](#browser-support), including
-the ones it cannot remove.
+Use this package when browser code needs one promise-based API across native
+Cookie Store and `document.cookie`, with shared defaults, validation and typed
+errors. It chooses a backend per call and reports differences it cannot remove
+under [Browser support](#browser-support).
+
+Choose [js-cookie](https://github.com/js-cookie/js-cookie) when a synchronous
+`document.cookie` helper fits better. Use the native
+[`cookieStore`](https://cookiestore.spec.whatwg.org/) API directly when every
+target browser supports it and raw browser behavior is useful. Choose a
+Cookie Store polyfill or ponyfill when you need that API shape in an unsupported
+browser and are willing to take on the package's own compatibility behavior.
+
+| Approach | Async | Native Cookie Store | Fallback | Changes a browser global | TypeScript | CHIPS | Prefix checks |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `cookies-utils` | Yes | When available, per call | `document.cookie` | No in modules; CDN build exposes `cookiesUtils` | Built in | Validates options and relies on browser support | Validates `__Secure-`, `__Host-`, and rejects JavaScript writes to HttpOnly prefixes |
+| `document.cookie` | No | No | Native API | No | DOM type only | Browser accepts supported attributes in the cookie string | Browser rules only |
+| `js-cookie` | No | No | Uses `document.cookie` directly | UMD build exposes `Cookies`; does not patch `cookieStore` | `@types/js-cookie` | Accepts the `partitioned` attribute | Browser rules only |
+| Native `cookieStore` | Yes | Yes | No | Supplied by the browser | DOM library types | Browser support | Browser rules |
+| Cookie Store polyfill or ponyfill | Usually | Emulates it where needed | Package specific | Polyfills may install a global; ponyfills are imported | Package specific | Package specific | Package specific |
+
+| Approach | SSR safe import | Error normalization | Runtime dependencies |
+| --- | --- | --- | --- |
+| `cookies-utils` | Data operations reject with `NO_COOKIE_ACCESS`; `onChange()` throws `UNSUPPORTED` outside a supported Window | `CookieError` for thrown backend failures; silent `document.cookie` write failures cannot be observed | None |
+| `document.cookie` | Guard access to `document` | No shared error model; writes may fail silently | None |
+| `js-cookie` | Module import is safe; cookie operations need `document` | No shared `CookieError` contract | None |
+| Native `cookieStore` | Guard access to the browser global | Native browser errors | None |
+| Cookie Store polyfill or ponyfill | Package specific | Package specific | Package specific |
+
+The polyfill row varies by package and version. For example, the
+[`cookie-store` project](https://github.com/markcellus/cookie-store) describes
+an imported ponyfill, while other packages install a global. Read the selected
+package's documentation before relying on its fallback, types or security
+checks.
 
 See [ROADMAP.md](ROADMAP.md) for where the library is heading.
 
@@ -102,6 +129,50 @@ Named imports behave the same way and tree shake:
 ```javascript
 import { get, set } from "cookies-utils";
 ```
+
+### Common cookie patterns
+
+Cross-site cookies require `SameSite=None` and `Secure`:
+
+```javascript
+await cookies.set("widget", "enabled", {
+  sameSite: "none",
+  secure: true,
+});
+```
+
+A `__Host-` cookie must be Secure, host only, and scoped to `/`:
+
+```javascript
+await cookies.set("__Host-session-hint", "1", {
+  secure: true,
+  path: "/",
+});
+```
+
+Partitioned cookies also require Secure:
+
+```javascript
+await cookies.set("__Host-widget", "enabled", {
+  secure: true,
+  sameSite: "none",
+  partitioned: true,
+  path: "/",
+});
+```
+
+Delete with the same scope used to create the cookie:
+
+```javascript
+await cookies.delete("preferences", {
+  path: "/account",
+});
+```
+
+Cookies with the same name can exist at different paths, domains or partitions.
+Use `getAll(name)` when the caller needs every readable matching cookie.
+
+See [SECURITY.md](SECURITY.md) for cookie security limits and safe reporting.
 
 ## Cookie change events
 

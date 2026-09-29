@@ -1,0 +1,225 @@
+name: Signed release
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag to sign
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signed-release
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      || (github.event_name == 'workflow_run'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'main'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve stable release tag
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          UPSTREAM_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          stable_tag='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            tag="$INPUT_TAG"
+            if [[ ! "$tag" =~ $stable_tag ]]; then
+              echo "Input must be a stable vX.Y.Z tag" >&2
+              exit 1
+            fi
+          else
+            if [[ ! "$UPSTREAM_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Release workflow run has an invalid commit SHA" >&2
+              exit 1
+            fi
+            mapfile -t tags < <(git tag --points-at "$UPSTREAM_HEAD_SHA" | grep -E "$stable_tag" || true)
+            if (( ${#tags[@]} == 0 )); then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "No stable release tag points at $UPSTREAM_HEAD_SHA"
+              exit 0
+            fi
+            if (( ${#tags[@]} != 1 )); then
+              echo "Expected one stable release tag at $UPSTREAM_HEAD_SHA, found ${#tags[@]}" >&2
+              exit 1
+            fi
+            tag="${tags[0]}"
+          fi
+
+          tag_commit="$(git rev-parse --verify "${tag}^{commit}")"
+          if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
+            if [[ "$tag_commit" != "$UPSTREAM_HEAD_SHA" ]]; then
+              echo "Release tag does not point to the completed Release workflow commit" >&2
+              exit 1
+            fi
+          elif ! git merge-base --is-ancestor "$tag_commit" main; then
+            echo "Manual backfill tag is not reachable from main" >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: steps.release.outputs.skip != 'true'
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Download and verify the npm package
+        if: steps.release.outputs.skip != 'true'
+        id: npm
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          OUTPUT_DIR: ${{ runner.temp }}/release-assets
+        run: |
+          mkdir -p "$OUTPUT_DIR"
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { writeFile } from 'node:fs/promises';
+          import { join } from 'node:path';
+
+          const tag = process.env.TAG;
+          const version = tag.slice(1);
+          const assetName = `cookies-utils-${version}.tgz`;
+          const metadataResponse = await fetch(`https://registry.npmjs.org/cookies-utils/${version}`);
+          if (!metadataResponse.ok || new URL(metadataResponse.url).origin !== 'https://registry.npmjs.org') {
+            throw new Error(`npm metadata request failed or redirected outside registry.npmjs.org: ${metadataResponse.status}`);
+          }
+
+          const metadata = await metadataResponse.json();
+          if (metadata.name !== 'cookies-utils' || metadata.version !== version) {
+            throw new Error('npm metadata name or version did not match the release tag');
+          }
+          if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(metadata.dist?.integrity ?? '')) {
+            throw new Error('npm metadata did not contain a SHA-512 integrity value');
+          }
+
+          const tarballUrl = new URL(metadata.dist.tarball);
+          const expectedPath = `/cookies-utils/-/${assetName}`;
+          if (tarballUrl.protocol !== 'https:' || tarballUrl.hostname !== 'registry.npmjs.org' || tarballUrl.pathname !== expectedPath) {
+            throw new Error('npm metadata returned an unexpected tarball URL');
+          }
+
+          const tarballResponse = await fetch(tarballUrl);
+          if (!tarballResponse.ok || new URL(tarballResponse.url).origin !== 'https://registry.npmjs.org') {
+            throw new Error(`npm tarball request failed or redirected outside registry.npmjs.org: ${tarballResponse.status}`);
+          }
+          const bytes = Buffer.from(await tarballResponse.arrayBuffer());
+          const actualIntegrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
+          if (actualIntegrity !== metadata.dist.integrity) {
+            throw new Error('downloaded npm tarball did not match registry dist.integrity');
+          }
+
+          await writeFile(join(process.env.OUTPUT_DIR, assetName), bytes, { flag: 'wx' });
+          const bundleName = `${assetName}.sigstore.json`;
+          await writeFile(process.env.GITHUB_OUTPUT, `tarball=${assetName}\nbundle=${bundleName}\nintegrity=${metadata.dist.integrity}\n`, { flag: 'a' });
+          NODE
+      - name: Check existing release assets
+        if: steps.release.outputs.skip != 'true'
+        id: assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+          TARBALL: ${{ steps.npm.outputs.tarball }}
+          BUNDLE: ${{ steps.npm.outputs.bundle }}
+        run: |
+          set -euo pipefail
+
+          release="$(gh api "repos/$GH_REPOSITORY/releases/tags/$TAG")"
+          if [[ "$(jq -r '.draft or .prerelease' <<< "$release")" == 'true' ]]; then
+            echo "GitHub release must be published and stable" >&2
+            exit 1
+          fi
+
+          names="$(jq -r '.assets[].name' <<< "$release")"
+          has_tarball=false
+          has_bundle=false
+          if grep -Fxq "$TARBALL" <<< "$names"; then has_tarball=true; fi
+          if grep -Fxq "$BUNDLE" <<< "$names"; then has_bundle=true; fi
+
+          if [[ "$has_tarball" == true && "$has_bundle" == true ]]; then
+            echo "state=complete" >> "$GITHUB_OUTPUT"
+          elif [[ "$has_tarball" == false && "$has_bundle" == false ]]; then
+            echo "state=missing" >> "$GITHUB_OUTPUT"
+          else
+            echo "Release has only one of the two signing assets; refusing to replace or complete it automatically" >&2
+            exit 1
+          fi
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: steps.release.outputs.skip != 'true'
+        with:
+          cosign-release: v3.1.3
+      - name: Verify existing release assets
+        if: steps.assets.outputs.state == 'complete'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+          TARBALL: ${{ steps.npm.outputs.tarball }}
+          BUNDLE: ${{ steps.npm.outputs.bundle }}
+          EXPECTED_INTEGRITY: ${{ steps.npm.outputs.integrity }}
+          ASSET_DIR: ${{ runner.temp }}/existing-assets
+        run: |
+          set -euo pipefail
+          mkdir -p "$ASSET_DIR"
+          gh release download "$TAG" --repo "$GH_REPOSITORY" --dir "$ASSET_DIR" --pattern "$TARBALL" --pattern "$BUNDLE"
+          node --input-type=module - "$ASSET_DIR/$TARBALL" "$EXPECTED_INTEGRITY" <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { readFile } from 'node:fs/promises';
+
+          const [path, expected] = process.argv.slice(2);
+          const actual = `sha512-${createHash('sha512').update(await readFile(path)).digest('base64')}`;
+          if (actual !== expected) throw new Error('existing GitHub release tarball does not match npm dist.integrity');
+          NODE
+          cosign verify-blob \
+            --bundle "$ASSET_DIR/$BUNDLE" \
+            --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/signed-release.yml@refs/heads/main' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            "$ASSET_DIR/$TARBALL"
+      - name: Sign npm package and upload release assets
+        if: steps.assets.outputs.state == 'missing'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+          TARBALL: ${{ steps.npm.outputs.tarball }}
+          BUNDLE: ${{ steps.npm.outputs.bundle }}
+          ASSET_DIR: ${{ runner.temp }}/release-assets
+        run: |
+          set -euo pipefail
+          tarball="$ASSET_DIR/$TARBALL"
+          bundle="$ASSET_DIR/$BUNDLE"
+          cosign sign-blob --yes --bundle "$bundle" "$tarball"
+          cosign verify-blob \
+            --bundle "$bundle" \
+            --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/signed-release.yml@refs/heads/main' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            "$tarball"
+          gh release upload "$TAG" "$tarball" "$bundle" --repo "$GH_REPOSITORY"

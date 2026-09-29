@@ -95,6 +95,29 @@ without throwing; those cases cannot be normalized.
 The current npm release was published from GitHub Actions through npm trusted
 publishing and includes a verifiable [provenance attestation](https://www.npmjs.com/package/cookies-utils?activeTab=provenance).
 
+GitHub releases also include the exact npm tarball and its Sigstore signature
+bundle. Download both assets for a stable release, then verify the tarball with
+Cosign. The certificate identity ties the signature to this repository's
+`Signed release` workflow on `main`.
+
+```sh
+VERSION=2.4.0
+TAG="v${VERSION}"
+TARBALL="cookies-utils-${VERSION}.tgz"
+BUNDLE="${TARBALL}.sigstore.json"
+
+gh release download "$TAG" --repo hamzahamidi/cookies-utils --pattern "$TARBALL" --pattern "$BUNDLE"
+cosign verify-blob \
+  --bundle "$BUNDLE" \
+  --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/signed-release.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  "$TARBALL"
+```
+
+The workflow checks the downloaded file against npm's published SHA-512
+integrity value before signing it. Replace `2.4.0` with the version you want to
+verify.
+
 Install from npm with `npm install cookies-utils`, or load the browser build from
 jsDelivr or unpkg for a `cookiesUtils` global:
 

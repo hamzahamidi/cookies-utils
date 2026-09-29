@@ -253,7 +253,6 @@ jobs:
           PROVENANCE: ${{ steps.npm.outputs.provenance }}
           STATE: ${{ steps.assets.outputs.state }}
           EXPECTED_INTEGRITY: ${{ steps.npm.outputs.integrity }}
-          EXPECTED_PROVENANCE_PATH: ${{ runner.temp }}/release-assets/${{ steps.npm.outputs.provenance }}
           ASSET_DIR: ${{ runner.temp }}/existing-assets
         run: |
           set -euo pipefail
@@ -274,21 +273,27 @@ jobs:
             --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/signed-release.yml@refs/heads/main' \
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
             "$ASSET_DIR/$TARBALL"
-          if [[ "$STATE" == 'complete' ]]; then
-            node --input-type=module - "$ASSET_DIR/$PROVENANCE" "$EXPECTED_PROVENANCE_PATH" <<'NODE'
-            import assert from 'node:assert/strict';
-            import { readFile } from 'node:fs/promises';
+      - name: Verify existing npm provenance asset
+        if: steps.assets.outputs.state == 'complete'
+        env:
+          PROVENANCE: ${{ steps.npm.outputs.provenance }}
+          EXPECTED_PROVENANCE_PATH: ${{ runner.temp }}/release-assets/${{ steps.npm.outputs.provenance }}
+          ASSET_DIR: ${{ runner.temp }}/existing-assets
+          TARBALL: ${{ steps.npm.outputs.tarball }}
+        run: |
+          node --input-type=module - "$ASSET_DIR/$PROVENANCE" "$EXPECTED_PROVENANCE_PATH" <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
 
-            const [actualPath, expectedPath] = process.argv.slice(2);
-            assert.deepStrictEqual(JSON.parse(await readFile(actualPath, 'utf8')), JSON.parse(await readFile(expectedPath, 'utf8')));
-            NODE
-            cosign verify-blob-attestation \
-              --type 'https://slsa.dev/provenance/v1' \
-              --bundle "$ASSET_DIR/$PROVENANCE" \
-              --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/release.yml@refs/heads/main' \
-              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-              "$ASSET_DIR/$TARBALL"
-          fi
+          const [actualPath, expectedPath] = process.argv.slice(2);
+          assert.deepStrictEqual(JSON.parse(await readFile(actualPath, 'utf8')), JSON.parse(await readFile(expectedPath, 'utf8')));
+          NODE
+          cosign verify-blob-attestation \
+            --type 'https://slsa.dev/provenance/v1' \
+            --bundle "$ASSET_DIR/$PROVENANCE" \
+            --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/release.yml@refs/heads/main' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            "$ASSET_DIR/$TARBALL"
       - name: Sign npm package and upload release assets
         if: steps.assets.outputs.state == 'missing'
         env:

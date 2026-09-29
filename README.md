@@ -23,7 +23,7 @@ back safely to `document.cookie`.
 - Validation for `SameSite`, `Secure`, `Partitioned` (CHIPS), the `__Secure-`,
   `__Host-`, `__Http-` and `__Host-Http-` prefixes, `Path`, `Domain`, `Expires`
   and `Max-Age`, including runtime values from JavaScript callers
-- Zero runtime dependencies, 2,961 bytes gzipped
+- Zero runtime dependencies, 3,320 bytes gzipped
 - ESM, CommonJS and TypeScript declarations, with tree-shakable named exports
 
 ## Why cookies-utils?
@@ -102,6 +102,30 @@ Named imports behave the same way and tree shake:
 ```javascript
 import { get, set } from "cookies-utils";
 ```
+
+## Cookie change events
+
+In a Window with native Cookie Store change events, `cookies.onChange()` passes
+normalized cookie data to the handler and returns an unsubscribe function:
+
+```javascript
+const unsubscribe = cookies.onChange(({ changed, deleted }) => {
+  for (const cookie of changed) console.log(cookie.name, cookie.value);
+  for (const cookie of deleted) console.log(cookie.name, "deleted");
+});
+
+unsubscribe();
+```
+
+The named `onChange` export behaves the same way. The document-cookie fallback,
+server environments and service workers do not provide this Window event API;
+`onChange()` throws `CookieError` with code `UNSUPPORTED` there. The library does
+not poll `document.cookie`. Native event records expose cookie names and values
+only. Deleted entries omit the value because the browser does not provide it;
+neither changed nor deleted entries include scope attributes such as path or
+domain. A replacement may appear as a changed cookie without a separate deleted
+entry. The library reports the browser's change records without inventing
+missing cookie attributes.
 
 ## Browser support
 
@@ -280,7 +304,7 @@ cookie has to name the same ones.
 | `INVALID_NAME` | the name is empty, not a string, contains a control character or malformed Unicode, or its encoded size exceeds the cookie limit |
 | `INVALID_VALUE` | the value passed to `set()` is not a string or contains malformed Unicode |
 | `INVALID_OPTIONS` | an option has the wrong runtime type, attributes conflict, an expiry is outside the JavaScript Date range, a path or domain is malformed or exceeds its byte limit, or the encoded name and value exceed 4096 bytes |
-| `UNSUPPORTED` | the selected backend cannot perform the request, for example `secure: false` on the Cookie Store backend |
+| `UNSUPPORTED` | the selected backend cannot perform the request, for example `secure: false` on the Cookie Store backend or change events without native Window support |
 | `NO_COOKIE_ACCESS` | neither `cookieStore` nor `document` exists in this environment |
 | `OPERATION_FAILED` | a browser backend operation fails; the original exception is available as `cause` |
 

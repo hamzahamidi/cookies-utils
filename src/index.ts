@@ -25,13 +25,18 @@ export async function get(name: string): Promise<string | undefined> {
 }
 
 /**
- * Lists every readable cookie. Attributes are populated only by the Cookie
- * Store backend. Several cookies can share a name; get(name) returns one
- * match, while getAll() preserves every matching cookie.
+ * Lists every readable cookie or the readable cookies with one name.
+ * Attributes are populated only by the Cookie Store backend. Several cookies
+ * can share a name; get(name) returns one match, while getAll(name) preserves
+ * every matching cookie.
  */
-export async function getAll(): Promise<Cookie[]> {
+export async function getAll(name?: string): Promise<Cookie[]> {
+  if (name !== undefined) validateName(name);
+  const encodedName = name === undefined ? undefined : encode(name);
   const all = await selectBackend().getAll();
-  return all.map((cookie) => ({ ...cookie, name: decode(cookie.name), value: decode(cookie.value) }));
+  return all
+    .filter((cookie) => encodedName === undefined || cookie.name === encodedName)
+    .map((cookie) => ({ ...cookie, name: decode(cookie.name), value: decode(cookie.value) }));
 }
 
 /** Reports whether a cookie is set, matching the name exactly. */

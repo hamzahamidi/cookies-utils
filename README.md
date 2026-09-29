@@ -23,7 +23,7 @@ back safely to `document.cookie`.
 - Validation for `SameSite`, `Secure`, `Partitioned` (CHIPS), the `__Secure-`,
   `__Host-`, `__Http-` and `__Host-Http-` prefixes, `Path`, `Domain`, `Expires`
   and `Max-Age`, including runtime values from JavaScript callers
-- Zero runtime dependencies, 2,934 bytes gzipped
+- Zero runtime dependencies, 2,961 bytes gzipped
 - ESM, CommonJS and TypeScript declarations, with tree-shakable named exports
 
 ## Why cookies-utils?
@@ -52,10 +52,10 @@ during a server render, the import still succeeds and a call rejects with
 `CookieError` code `NO_COOKIE_ACCESS`.
 
 Cookie names are not unique. Cookies with the same name can differ by path,
-domain or partition, so `get(name)` returns one match. Use `getAll()` when every
-readable cookie with that name matters. The document-cookie backend cannot
-report scope attributes; the Cookie Store backend reports those its browser
-provides.
+domain or partition, so `get(name)` returns one match. Use `getAll(name)` when
+every readable cookie with that name matters. `getAll()` without a name lists
+every readable cookie. The document-cookie backend cannot report scope
+attributes; the Cookie Store backend reports those its browser provides.
 
 Before either backend is selected, writes validate the encoded name and value
 pair against the 4096-byte limit, and validate UTF-8 path and domain lengths
@@ -92,6 +92,7 @@ await cookies.set("session", "abc", { secure: true, sameSite: "lax" });
 const value = await cookies.get("session"); // "abc" or undefined
 const exists = await cookies.has("session"); // boolean
 const all = await cookies.getAll(); // Cookie[]
+const sessions = await cookies.getAll("session"); // Cookie[]
 
 await cookies.delete("session");
 ```

@@ -51,4 +51,16 @@ describe('document.cookie fallback through the public API', () => {
   it('reports absence as undefined', async () => {
     expect(await cookies.get('never-written')).toBeUndefined();
   });
+
+  it('filters getAll by name on the document.cookie backend', async () => {
+    const otherName = `${NAME}-other`;
+    try {
+      await cookies.set(NAME, 'selected');
+      await cookies.set(otherName, 'ignored');
+      expect(await cookies.getAll(NAME)).toEqual([{ name: NAME, value: 'selected' }]);
+      expect(await cookies.getAll('missing-name')).toEqual([]);
+    } finally {
+      await cookies.delete(otherName);
+    }
+  });
 });

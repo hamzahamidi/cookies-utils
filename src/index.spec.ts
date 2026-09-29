@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cookies, CookieError } from './index';
+import { getAll, cookies, CookieError } from './index';
 
 const globalRef = globalThis as Record<string, unknown>;
 
@@ -18,11 +18,12 @@ class FakeDocument {
 class FakeCookieStore {
   setCalls: Record<string, unknown>[] = [];
   deleteCalls: Record<string, unknown>[] = [];
+  all: { name: string; value: string }[] = [];
   async get(): Promise<null> {
     return null;
   }
-  async getAll(): Promise<never[]> {
-    return [];
+  async getAll(): Promise<{ name: string; value: string }[]> {
+    return this.all;
   }
   async set(options: Record<string, unknown>): Promise<void> {
     this.setCalls.push(options);
@@ -147,6 +148,37 @@ describe('public API', () => {
       { name: 'a', value: '1' },
       { name: 'b c', value: 'hello world' },
     ]);
+  });
+
+  it('filters document.cookie results by an encoded name and keeps duplicates', async () => {
+    globalRef.document = new FakeDocument('theme=light; b%20c=one; theme=dark; b%20c=two');
+    expect(await cookies.getAll('b c')).toEqual([
+      { name: 'b c', value: 'one' },
+      { name: 'b c', value: 'two' },
+    ]);
+    expect(await getAll('theme')).toEqual([
+      { name: 'theme', value: 'light' },
+      { name: 'theme', value: 'dark' },
+    ]);
+    expect(await cookies.getAll('missing')).toEqual([]);
+  });
+
+  it('filters Cookie Store results by the encoded name', async () => {
+    const store = new FakeCookieStore();
+    store.all = [
+      { name: 'b%20c', value: 'one' },
+      { name: 'other', value: 'skip' },
+      { name: 'b%20c', value: 'two' },
+    ];
+    globalRef.cookieStore = store;
+    expect(await cookies.getAll('b c')).toEqual([
+      { name: 'b c', value: 'one' },
+      { name: 'b c', value: 'two' },
+    ]);
+  });
+
+  it('rejects an invalid getAll name before backend selection', async () => {
+    await expect(cookies.getAll(123 as never)).rejects.toMatchObject({ code: 'INVALID_NAME' });
   });
 });
 

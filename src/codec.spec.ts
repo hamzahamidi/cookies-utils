@@ -1,3 +1,4 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { decode, encode } from './codec';
 
@@ -6,6 +7,14 @@ describe('codec', () => {
     for (const raw of ['a b', 'a;b', 'a=b', 'a,b', 'peche a l accent']) {
       expect(decode(encode(raw))).toBe(raw);
     }
+  });
+
+  it('round trips arbitrary Unicode strings', () => {
+    fc.assert(
+      fc.property(fc.fullUnicodeString({ maxLength: 256 }), (raw) => {
+        expect(decode(encode(raw))).toBe(raw);
+      }),
+    );
   });
 
   it('encodes separators that would break the header', () => {

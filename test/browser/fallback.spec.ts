@@ -63,4 +63,8 @@ describe('document.cookie fallback through the public API', () => {
       await cookies.delete(otherName);
     }
   });
+
+  it('rejects change subscriptions instead of polling document.cookie', () => {
+    expect(() => cookies.onChange(() => {})).toThrowError(expect.objectContaining({ code: 'UNSUPPORTED' }));
+  });
 });

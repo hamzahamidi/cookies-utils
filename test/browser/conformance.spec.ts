@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CookieError } from '../../src/errors';
-import { cookies } from '../../src/index';
+import { cookies, type CookieChange } from '../../src/index';
 
 const NAME = 'conformance';
 
@@ -9,6 +9,35 @@ const usesCookieStore =
   globalThis.location.protocol === 'https:' && 'cookieStore' in globalThis;
 const selected = usesCookieStore ? 'Cookie Store' : 'document.cookie';
 const preservesPartitionedDuplicates = /Chrome\//.test(navigator.userAgent);
+const supportsWindowChangeEvents =
+  typeof window !== 'undefined' &&
+  (() => {
+    const store = (
+      globalThis as {
+        cookieStore?: object & { addEventListener?: unknown; removeEventListener?: unknown };
+      }
+    ).cookieStore;
+    return (
+      store !== undefined &&
+      store !== null &&
+      'onchange' in store &&
+      typeof store.addEventListener === 'function' &&
+      typeof store.removeEventListener === 'function'
+    );
+  })();
+
+function waitForNameChange(name: string, field: 'changed' | 'deleted') {
+  let unsubscribe = (): void => {};
+  const promise = new Promise<CookieChange>((resolve) => {
+    unsubscribe = cookies.onChange((change) => {
+      if (change[field].some((cookie) => cookie.name === name)) {
+        unsubscribe();
+        resolve(change);
+      }
+    });
+  });
+  return { promise, cancel: () => unsubscribe() };
+}
 
 afterEach(async () => {
   await cookies.delete(NAME, { path: '/' });
@@ -76,6 +105,28 @@ describe('real browser conformance', () => {
       expect(await cookies.getAll('missing-name')).toEqual([]);
     } finally {
       await cookies.delete(otherName, { path: '/' });
+    }
+  });
+
+  it.skipIf(!supportsWindowChangeEvents)('reports cookie creation, replacement and deletion', async () => {
+    let pending = waitForNameChange(NAME, 'changed');
+    try {
+      await cookies.set(NAME, 'created', { path: '/' });
+      const created = await pending.promise;
+      expect(created.changed.find((cookie) => cookie.name === NAME)?.value).toBe('created');
+
+      pending = waitForNameChange(NAME, 'changed');
+      await cookies.set(NAME, 'replaced', { path: '/' });
+      const replaced = await pending.promise;
+      expect(replaced.changed.find((cookie) => cookie.name === NAME)?.value).toBe('replaced');
+
+      pending = waitForNameChange(NAME, 'deleted');
+      await cookies.delete(NAME, { path: '/' });
+      const deleted = await pending.promise;
+      expect(deleted.deleted).toContainEqual({ name: NAME });
+    } finally {
+      pending.cancel();
+      await cookies.delete(NAME, { path: '/' });
     }
   });
 

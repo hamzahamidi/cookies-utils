@@ -1,3 +1,4 @@
+import { onChange } from './change';
 import { selectBackend } from './backends/select';
 import { decode, encode } from './codec';
 import type { Cookie, CookieAttributes, DeleteOptions, SameSite } from './types';
@@ -5,6 +6,8 @@ import { validate, validateName, validateOptionsObject, validateScope, validateW
 
 export { CookieError } from './errors';
 export type { CookieErrorCode } from './errors';
+export { onChange } from './change';
+export type { CookieChange, CookieChangeHandler, DeletedCookie } from './change';
 export type { Cookie, CookieAttributes, DeleteOptions, SameSite } from './types';
 
 /**
@@ -81,5 +84,5 @@ async function del(name: string, options: DeleteOptions = {}): Promise<void> {
 
 export { del as delete };
 
-/** Namespace form of get, getAll, has, set and delete, for a single import. */
-export const cookies = { get, getAll, has, set, delete: del };
+/** Namespace form of the cookie API, including native change events. */
+export const cookies = { get, getAll, has, set, delete: del, onChange };

@@ -224,10 +224,6 @@ On a non-HTTPS page with a cookie-capable <code>document</code>, the library sel
 
 This package reads and writes browser cookies. It is not an authentication system and does not make client-readable values safe to trust. Releases from the current publishing workflow include npm provenance and artifacts for independent verification. See [SECURITY.md](SECURITY.md).
 
-## Migrating from 1.x
-
-Version 2 is a breaking redesign. The API is asynchronous, the default path is <code>/</code>, and values returned by <code>get</code> are decoded. Read the [1.0.0 to 2.x migration guide](MIGRATION.md) before upgrading.
-
 ## Contributing
 
 Use [GitHub Issues](https://github.com/hamzahamidi/cookies-utils/issues) for bug reports, enhancement requests, and feedback. See [CONTRIBUTING.md](CONTRIBUTING.md) to propose a change and run the project checks. Report suspected security vulnerabilities through [SECURITY.md](SECURITY.md), not a public issue.

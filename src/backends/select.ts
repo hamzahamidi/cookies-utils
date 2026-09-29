@@ -1,4 +1,4 @@
-import { CookieError } from '../errors';
+import { CookieError, operationFailed } from '../errors';
 import type { Backend } from '../types';
 import { createCookieStoreBackend, type CookieStoreLike } from './cookie-store';
 import { createDocumentCookieBackend, type CookieTarget } from './document-cookie';
@@ -29,7 +29,11 @@ function isPlainHttpOrigin(): boolean {
  * instead of a CookieError.
  */
 function canCarryCookies(target: CookieTarget | undefined): target is CookieTarget {
-  return typeof target?.cookie === 'string';
+  try {
+    return typeof target?.cookie === 'string';
+  } catch (cause) {
+    throw operationFailed('access', cause);
+  }
 }
 
 /** Detection runs per call, never at module evaluation, so importing stays SSR safe. */

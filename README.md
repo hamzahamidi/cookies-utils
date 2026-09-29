@@ -20,10 +20,10 @@ back safely to `document.cookie`.
 - Normalized behaviour across backends: the same defaults and the same
   validation either way, and the one divergence that cannot be removed is
   documented rather than hidden
-- Validation for `SameSite`, `Secure`, `Partitioned` (CHIPS), the `__Secure-` and
-  `__Host-` prefixes, `Path`, `Domain`, `Expires` and `Max-Age`, including
-  combinations that are unsafe rather than merely wrong
-- Zero runtime dependencies, 1,987 bytes gzipped
+- Validation for `SameSite`, `Secure`, `Partitioned` (CHIPS), the `__Secure-`,
+  `__Host-`, `__Http-` and `__Host-Http-` prefixes, `Path`, `Domain`, `Expires`
+  and `Max-Age`, including runtime values from JavaScript callers
+- Zero runtime dependencies, 2,934 bytes gzipped
 - ESM, CommonJS and TypeScript declarations, with tree-shakable named exports
 
 ## Why cookies-utils?
@@ -50,6 +50,22 @@ to `"/"` and `sameSite` to `"lax"`, which is why a bare `delete(name)` targets t
 same cookie a bare `set(name, value)` wrote. Where neither backend exists, such as
 during a server render, the import still succeeds and a call rejects with
 `CookieError` code `NO_COOKIE_ACCESS`.
+
+Cookie names are not unique. Cookies with the same name can differ by path,
+domain or partition, so `get(name)` returns one match. Use `getAll()` when every
+readable cookie with that name matters. The document-cookie backend cannot
+report scope attributes; the Cookie Store backend reports those its browser
+provides.
+
+Before either backend is selected, writes validate the encoded name and value
+pair against the 4096-byte limit, and validate UTF-8 path and domain lengths
+against 1024 bytes each. Explicit paths must be non-empty and start with `/`.
+Explicit domains must be non-empty and syntactically plausible; the browser
+still decides whether a domain matches the current origin. Exceptions thrown
+while selecting or calling either backend reject with `CookieError` code
+`OPERATION_FAILED`, with the original browser error available as `cause`. The
+`document.cookie` setter can silently ignore writes that a browser rejects
+without throwing; those cases cannot be normalized.
 
 ## Installation
 
@@ -221,6 +237,12 @@ written, for:
   already satisfies the path rule on its own
 - `partitioned: true` without `secure: true`
 - a `path` or `domain` containing a semicolon or a control character
+- an option whose runtime type is wrong, an empty or relative path, or an
+  obviously malformed domain
+- an encoded name and value pair over 4096 bytes, or a UTF-8 path or domain
+  over 1024 bytes
+- a write or delete using `__Http-` or `__Host-Http-`, since those prefixes
+  require `HttpOnly` and must be set by a server using `Set-Cookie`
 
 Anything your 1.0.0 code relied on being silently tolerated in this list now
 gets a rejection, before anything is written. See the error reference below
@@ -238,8 +260,8 @@ other empty, non-string or control-character name.
 | --- | --- | --- | --- |
 | `path` | `string` | `set`, `delete` | Cookie path scope. Defaults to `"/"` when omitted, so a bare `set(name, value)` and a bare `delete(name)` target the same cookie. |
 | `domain` | `string` | `set`, `delete` | Cookie domain scope. No default. |
-| `expires` | `Date \| number` | `set` | Absolute expiry, as a `Date` or Unix time in milliseconds. Cannot be combined with `maxAge`. |
-| `maxAge` | `number` | `set` | Relative expiry in seconds. Zero or negative expires the cookie immediately. Must be an integer. Cannot be combined with `expires`. |
+| `expires` | `Date \| number` | `set` | Absolute expiry, as a `Date` or Unix time in milliseconds within the JavaScript Date range. Cannot be combined with `maxAge`. |
+| `maxAge` | `number` | `set` | Relative expiry in seconds. Zero or negative expires the cookie immediately. Must be an integer that fits the JavaScript Date range. Cannot be combined with `expires`. |
 | `secure` | `boolean` | `set` | Sends the cookie only over https. No default: the Cookie Store backend always writes a Secure cookie and rejects `secure: false` with `UNSUPPORTED`. |
 | `sameSite` | `"strict" \| "lax" \| "none"` | `set` | Cross-site sending policy, lowercase only. Defaults to `"lax"` when omitted. `"none"` requires `secure: true`. |
 | `partitioned` | `boolean` | `set`, `delete` | CHIPS partitioned storage. On `set()`, requires `secure: true`. On `delete()` the expiry write asserts `Secure` for you: CHIPS requires a Partitioned cookie to be Secure, and a browser discards a write carrying `Partitioned` without it, which would leave the cookie in place. |
@@ -254,11 +276,16 @@ cookie has to name the same ones.
 
 | `CookieErrorCode` | Thrown when |
 | --- | --- |
-| `INVALID_NAME` | the name is empty, not a string, or contains a control character |
-| `INVALID_VALUE` | the value passed to `set()` is not a string |
-| `INVALID_OPTIONS` | attributes conflict: see "Inputs 1.0.0 tolerated" above for the `set()` cases, plus a non-finite `expires` (an invalid `Date`, or `Infinity`), and, on `delete()`, a `path` or `domain` with a semicolon or control character |
+| `INVALID_NAME` | the name is empty, not a string, contains a control character or malformed Unicode, or its encoded size exceeds the cookie limit |
+| `INVALID_VALUE` | the value passed to `set()` is not a string or contains malformed Unicode |
+| `INVALID_OPTIONS` | an option has the wrong runtime type, attributes conflict, an expiry is outside the JavaScript Date range, a path or domain is malformed or exceeds its byte limit, or the encoded name and value exceed 4096 bytes |
 | `UNSUPPORTED` | the selected backend cannot perform the request, for example `secure: false` on the Cookie Store backend |
 | `NO_COOKIE_ACCESS` | neither `cookieStore` nor `document` exists in this environment |
+| `OPERATION_FAILED` | a browser backend operation fails; the original exception is available as `cause` |
+
+`maxAge` remains supported consistently across both backends. Cookie Store
+writes convert it to an absolute `expires` value until native `maxAge` behavior
+matches the `document.cookie` fallback in the supported browsers.
 
 `deleteAllCookies()` was removed rather than fixed. It could not read the path or
 domain of anything it found and could not see `HttpOnly` cookies, so it under

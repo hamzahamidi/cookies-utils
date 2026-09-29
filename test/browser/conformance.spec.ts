@@ -8,6 +8,7 @@ const NAME = 'conformance';
 const usesCookieStore =
   globalThis.location.protocol === 'https:' && 'cookieStore' in globalThis;
 const selected = usesCookieStore ? 'Cookie Store' : 'document.cookie';
+const preservesPartitionedDuplicates = /Chrome\//.test(navigator.userAgent);
 
 afterEach(async () => {
   await cookies.delete(NAME, { path: '/' });
@@ -61,5 +62,49 @@ describe('real browser conformance', () => {
 
   it('reports absence as undefined', async () => {
     expect(await cookies.get('never-written')).toBeUndefined();
+  });
+
+  it('returns CookieError for invalid runtime options and prefixes', async () => {
+    const badPath = await cookies.set(NAME, 'x', { path: 12 } as never).then(
+      () => 'accepted',
+      (error) => (error as CookieError).code,
+    );
+    const badMaxAge = await cookies.set(NAME, 'x', { maxAge: Infinity } as never).then(
+      () => 'accepted',
+      (error) => (error as CookieError).code,
+    );
+    const httpPrefix = await cookies.set('__Http-conformance', 'x').then(
+      () => 'accepted',
+      (error) => (error as CookieError).code,
+    );
+    expect(badPath).toBe('INVALID_OPTIONS');
+    expect(badMaxAge).toBe('INVALID_OPTIONS');
+    expect(httpPrefix).toBe('UNSUPPORTED');
+  });
+
+  it('rejects an encoded cookie pair over 4096 bytes before writing', async () => {
+    const outcome = await cookies.set(NAME, 'é'.repeat(683)).then(
+      () => 'accepted',
+      (error) => (error as CookieError).code,
+    );
+    expect(outcome).toBe('INVALID_OPTIONS');
+  });
+
+  it.skipIf(!preservesPartitionedDuplicates)('preserves duplicate names with distinct partition keys', async () => {
+    const duplicateName = `${NAME}-duplicate-${Math.floor(Math.random() * 1_000_000_000)}`;
+    try {
+      await cookies.set(duplicateName, 'regular', { path: '/', secure: true, sameSite: 'none' });
+      await cookies.set(duplicateName, 'partitioned', {
+        path: '/',
+        secure: true,
+        sameSite: 'none',
+        partitioned: true,
+      });
+      const matching = (await cookies.getAll()).filter((cookie) => cookie.name === duplicateName);
+      expect(matching.map((cookie) => cookie.value).sort()).toEqual(['partitioned', 'regular']);
+    } finally {
+      await cookies.delete(duplicateName, { path: '/', partitioned: true });
+      await cookies.delete(duplicateName, { path: '/' });
+    }
   });
 });

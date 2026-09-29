@@ -1,7 +1,7 @@
 import { selectBackend } from './backends/select';
 import { decode, encode } from './codec';
 import type { Cookie, CookieAttributes, DeleteOptions, SameSite } from './types';
-import { validate, validateName, validateScope } from './validate';
+import { validate, validateName, validateOptionsObject, validateScope, validateWritableName } from './validate';
 
 export { CookieError } from './errors';
 export type { CookieErrorCode } from './errors';
@@ -24,7 +24,11 @@ export async function get(name: string): Promise<string | undefined> {
   return found === undefined ? undefined : decode(found.value);
 }
 
-/** Lists every readable cookie. Attributes are populated only by the Cookie Store backend. */
+/**
+ * Lists every readable cookie. Attributes are populated only by the Cookie
+ * Store backend. Several cookies can share a name; get(name) returns one
+ * match, while getAll() preserves every matching cookie.
+ */
 export async function getAll(): Promise<Cookie[]> {
   const all = await selectBackend().getAll();
   return all.map((cookie) => ({ ...cookie, name: decode(cookie.name), value: decode(cookie.value) }));
@@ -42,10 +46,12 @@ export async function set(
   value: string,
   options: CookieAttributes = {},
 ): Promise<void> {
+  validateOptionsObject(options, 'set options');
+  const provided = options as CookieAttributes;
   const attributes = validate(name, value, {
-    ...options,
-    path: options.path ?? DEFAULT_PATH,
-    sameSite: options.sameSite ?? DEFAULT_SAME_SITE,
+    ...provided,
+    path: provided.path === undefined ? DEFAULT_PATH : provided.path,
+    sameSite: provided.sameSite === undefined ? DEFAULT_SAME_SITE : provided.sameSite,
   });
   await selectBackend().set(encode(name), encode(value), attributes);
 }
@@ -57,7 +63,13 @@ export async function set(
  */
 async function del(name: string, options: DeleteOptions = {}): Promise<void> {
   validateName(name);
-  const scoped: DeleteOptions = { ...options, path: options.path ?? DEFAULT_PATH };
+  validateWritableName(name);
+  validateOptionsObject(options, 'delete options');
+  const provided = options as DeleteOptions;
+  const scoped: DeleteOptions = {
+    ...provided,
+    path: provided.path === undefined ? DEFAULT_PATH : provided.path,
+  };
   validateScope(scoped);
   await selectBackend().delete(encode(name), scoped);
 }

@@ -83,6 +83,60 @@ describe('public API', () => {
     await expect(cookies.set('a', 'b', { sameSite: 'none' })).rejects.toBeInstanceOf(CookieError);
   });
 
+  it('rejects options with the wrong runtime shape before selecting a backend', async () => {
+    const store = new FakeCookieStore();
+    globalRef.cookieStore = store;
+    await expect(cookies.set('a', 'b', { path: 123 } as never)).rejects.toMatchObject({
+      name: 'CookieError',
+      code: 'INVALID_OPTIONS',
+    });
+    await expect(cookies.set('a', 'b', null as never)).rejects.toMatchObject({
+      name: 'CookieError',
+      code: 'INVALID_OPTIONS',
+    });
+    for (const options of [{ path: 123 }, { domain: {} }, { partitioned: 1 }]) {
+      await expect(cookies.delete('a', options as never)).rejects.toMatchObject({
+        name: 'CookieError',
+        code: 'INVALID_OPTIONS',
+      });
+    }
+    expect(store.setCalls).toEqual([]);
+    expect(store.deleteCalls).toEqual([]);
+  });
+
+  it('uses UNSUPPORTED for writes and deletes of JavaScript-inaccessible prefixes', async () => {
+    const store = new FakeCookieStore();
+    globalRef.cookieStore = store;
+    await expect(cookies.set('__Http-session', 'x')).rejects.toMatchObject({ code: 'UNSUPPORTED' });
+    await expect(cookies.set('__Host-Http-session', 'x')).rejects.toMatchObject({ code: 'UNSUPPORTED' });
+    await expect(cookies.delete('__Http-session')).rejects.toMatchObject({ code: 'UNSUPPORTED' });
+    await expect(cookies.delete('__Host-Http-session')).rejects.toMatchObject({ code: 'UNSUPPORTED' });
+    expect(store.setCalls).toEqual([]);
+    expect(store.deleteCalls).toEqual([]);
+  });
+
+  it('normalizes a document.cookie getter failure during backend selection', async () => {
+    const cause = new Error('document cookie access denied');
+    globalRef.document = Object.defineProperty({}, 'cookie', {
+      get() {
+        throw cause;
+      },
+    });
+
+    const error = (await cookies.getAll().catch((reason: unknown) => reason as CookieError)) as CookieError;
+    expect(error).toMatchObject({ name: 'CookieError', code: 'OPERATION_FAILED' });
+    expect(error.cause).toBe(cause);
+  });
+
+  it('rejects an empty or relative path before touching document.cookie', async () => {
+    const fake = new FakeDocument('');
+    globalRef.document = fake;
+    await expect(cookies.set('a', 'b', { path: '' })).rejects.toMatchObject({ code: 'INVALID_OPTIONS' });
+    await expect(cookies.set('a', 'b', { path: 'account' })).rejects.toMatchObject({ code: 'INVALID_OPTIONS' });
+    await expect(cookies.delete('a', { path: '' })).rejects.toMatchObject({ code: 'INVALID_OPTIONS' });
+    expect(fake.writes).toEqual([]);
+  });
+
   it('rejects with NO_COOKIE_ACCESS when there is no cookie jar', async () => {
     await expect(cookies.get('a')).rejects.toMatchObject({ code: 'NO_COOKIE_ACCESS' });
   });

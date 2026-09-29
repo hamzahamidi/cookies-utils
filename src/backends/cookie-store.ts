@@ -1,4 +1,4 @@
-import { CookieError } from '../errors';
+import { CookieError, operationFailed } from '../errors';
 import type { Backend, Cookie, DeleteOptions, NormalizedAttributes, SameSite } from '../types';
 
 /** Shape of a single result from CookieStore.get() or getAll(), before normalization. */
@@ -41,12 +41,23 @@ function toCookie(item: CookieStoreItem): Cookie {
 export function createCookieStoreBackend(store: CookieStoreLike): Backend {
   return {
     async get(name: string): Promise<Cookie | undefined> {
-      const item = await store.get(name);
+      let item: CookieStoreItem | null;
+      try {
+        item = await store.get(name);
+      } catch (cause) {
+        throw operationFailed('get', cause);
+      }
       return item === null ? undefined : toCookie(item);
     },
 
     async getAll(): Promise<Cookie[]> {
-      return (await store.getAll()).map(toCookie);
+      let items: CookieStoreItem[];
+      try {
+        items = await store.getAll();
+      } catch (cause) {
+        throw operationFailed('list', cause);
+      }
+      return items.map(toCookie);
     },
 
     async set(name: string, value: string, attributes: NormalizedAttributes): Promise<void> {
@@ -61,12 +72,11 @@ export function createCookieStoreBackend(store: CookieStoreLike): Backend {
       const options: Record<string, unknown> = { name, value };
       if (attributes.path !== undefined) options.path = attributes.path;
       if (attributes.domain !== undefined) options.domain = attributes.domain;
-      // maxAge is not a CookieInit member and WebIDL drops unknown members in
-      // silence, so forwarding it writes a session cookie on any engine that
-      // has not implemented it. validate() guarantees maxAge and expires are
-      // never both set. A non-positive maxAge becomes the epoch rather than
-      // the arithmetic result, because Firefox keeps a cookie whose expires is
-      // the current millisecond exactly.
+      // Convert maxAge to expires until native maxAge behaves consistently
+      // across the supported browsers and matches the fallback semantics.
+      // validate() guarantees maxAge and expires are never both set. A
+      // non-positive maxAge becomes the epoch because Firefox keeps a cookie
+      // whose expires is the current millisecond exactly.
       if (attributes.maxAge !== undefined) {
         options.expires = attributes.maxAge > 0 ? Date.now() + attributes.maxAge * 1000 : 0;
       } else if (attributes.expires !== undefined) {
@@ -75,7 +85,11 @@ export function createCookieStoreBackend(store: CookieStoreLike): Backend {
       if (attributes.sameSite !== undefined) options.sameSite = attributes.sameSite;
       if (attributes.partitioned !== undefined) options.partitioned = attributes.partitioned;
 
-      await store.set(options);
+      try {
+        await store.set(options);
+      } catch (cause) {
+        throw operationFailed('set', cause);
+      }
     },
 
     async delete(name: string, options: DeleteOptions): Promise<void> {
@@ -83,7 +97,11 @@ export function createCookieStoreBackend(store: CookieStoreLike): Backend {
       if (options.path !== undefined) request.path = options.path;
       if (options.domain !== undefined) request.domain = options.domain;
       if (options.partitioned !== undefined) request.partitioned = options.partitioned;
-      await store.delete(request);
+      try {
+        await store.delete(request);
+      } catch (cause) {
+        throw operationFailed('delete', cause);
+      }
     },
   };
 }

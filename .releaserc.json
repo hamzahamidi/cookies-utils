@@ -9,6 +9,11 @@
                 "preset": "angular",
                 "releaseRules": [
                     {
+                        "type": "docs",
+                        "scope": "readme",
+                        "release": "patch"
+                    },
+                    {
                         "scope": "/.skip ci/",
                         "release": false
                     }

@@ -95,28 +95,36 @@ without throwing; those cases cannot be normalized.
 The current npm release was published from GitHub Actions through npm trusted
 publishing and includes a verifiable [provenance attestation](https://www.npmjs.com/package/cookies-utils?activeTab=provenance).
 
-GitHub releases also include the exact npm tarball and its Sigstore signature
-bundle. Download both assets for a stable release, then verify the tarball with
-Cosign. The certificate identity ties the signature to this repository's
-`Signed release` workflow on `main`.
+GitHub releases also include the exact npm tarball, its Sigstore signature
+bundle, and the SLSA provenance bundle created during npm trusted publishing.
+The provenance names the source commit and the original `Release` workflow.
 
 ```sh
 VERSION=2.4.0
 TAG="v${VERSION}"
 TARBALL="cookies-utils-${VERSION}.tgz"
 BUNDLE="${TARBALL}.sigstore.json"
+PROVENANCE="${TARBALL}.intoto.jsonl"
 
-gh release download "$TAG" --repo hamzahamidi/cookies-utils --pattern "$TARBALL" --pattern "$BUNDLE"
+gh release download "$TAG" --repo hamzahamidi/cookies-utils --pattern "$TARBALL" --pattern "$BUNDLE" --pattern "$PROVENANCE"
 cosign verify-blob \
   --bundle "$BUNDLE" \
   --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/signed-release.yml@refs/heads/main' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   "$TARBALL"
+cosign verify-blob-attestation \
+  --type 'https://slsa.dev/provenance/v1' \
+  --bundle "$PROVENANCE" \
+  --certificate-identity 'https://github.com/hamzahamidi/cookies-utils/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  "$TARBALL"
 ```
 
-The workflow checks the downloaded file against npm's published SHA-512
-integrity value before signing it. Replace `2.4.0` with the version you want to
-verify.
+The workflow checks the tarball against npm's published SHA-512 integrity value
+and verifies the provenance subject, source commit, and workflow identity before
+uploading. The `.intoto.jsonl` asset is the Sigstore bundle containing npm's
+signed SLSA statement, certificate, and transparency proof. Replace `2.4.0`
+with the version you want to verify.
 
 Install from npm with `npm install cookies-utils`, or load the browser build from
 jsDelivr or unpkg for a `cookiesUtils` global:

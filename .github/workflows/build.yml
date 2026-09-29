@@ -41,7 +41,11 @@ jobs:
         # and the upload would fail every outside contribution. A push event
         # has no pull_request context at all, so the fork check treats a
         # missing value as "not a fork" rather than skipping main too.
-        if: matrix.node-version == '22.x' && github.event.pull_request.head.repo.fork != true
+        # Dependabot pull requests also run without repository secrets.
+        if: >-
+          matrix.node-version == '22.x' &&
+          github.event.pull_request.head.repo.fork != true &&
+          github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

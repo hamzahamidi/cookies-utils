@@ -34,6 +34,7 @@
     "coverage": "vitest run --project unit --coverage",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.scripts.json",
     "smoke": "node scripts/smoke-package.mjs",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
     "semantic-release": "semantic-release"
   },
   "keywords": [

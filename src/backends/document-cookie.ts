@@ -8,6 +8,10 @@ export interface CookieTarget {
   cookie: string;
 }
 
+function promiseResult<T>(operation: () => T): Promise<T> {
+  return Promise.resolve().then(operation);
+}
+
 /**
  * Builds a Backend backed by document.cookie. Cannot report a cookie's path
  * or domain, and cannot see HttpOnly cookies, because neither is exposed to
@@ -25,35 +29,39 @@ export function createDocumentCookieBackend(target: CookieTarget): Backend {
   };
 
   return {
-    async get(name: string): Promise<Cookie | undefined> {
-      return readAll().find((cookie) => cookie.name === name);
+    get(name: string): Promise<Cookie | undefined> {
+      return promiseResult(() => readAll().find((cookie) => cookie.name === name));
     },
 
-    async getAll(): Promise<Cookie[]> {
-      return readAll();
+    getAll(): Promise<Cookie[]> {
+      return promiseResult(readAll);
     },
 
-    async set(name: string, value: string, attributes: NormalizedAttributes): Promise<void> {
-      const cookie = serialize(name, value, attributes);
-      try {
-        target.cookie = cookie;
-      } catch (cause) {
-        throw operationFailed('set', cause);
-      }
+    set(name: string, value: string, attributes: NormalizedAttributes): Promise<void> {
+      return promiseResult(() => {
+        const cookie = serialize(name, value, attributes);
+        try {
+          target.cookie = cookie;
+        } catch (cause) {
+          throw operationFailed('set', cause);
+        }
+      });
     },
 
-    async delete(name: string, options: DeleteOptions): Promise<void> {
-      const attributes: NormalizedAttributes = { ...options, maxAge: 0, expires: 0 };
-      // CHIPS requires a Partitioned cookie to be Secure, so a browser discards a
-      // write carrying Partitioned without it. Deletion works by overwriting with
-      // an expired cookie, so a discarded write leaves the cookie in place.
-      if (options.partitioned === true) attributes.secure = true;
-      const cookie = serialize(name, '', attributes);
-      try {
-        target.cookie = cookie;
-      } catch (cause) {
-        throw operationFailed('delete', cause);
-      }
+    delete(name: string, options: DeleteOptions): Promise<void> {
+      return promiseResult(() => {
+        const attributes: NormalizedAttributes = { ...options, maxAge: 0, expires: 0 };
+        // CHIPS requires a Partitioned cookie to be Secure, so a browser discards a
+        // write carrying Partitioned without it. Deletion works by overwriting with
+        // an expired cookie, so a discarded write leaves the cookie in place.
+        if (options.partitioned === true) attributes.secure = true;
+        const cookie = serialize(name, '', attributes);
+        try {
+          target.cookie = cookie;
+        } catch (cause) {
+          throw operationFailed('delete', cause);
+        }
+      });
     },
   };
 }

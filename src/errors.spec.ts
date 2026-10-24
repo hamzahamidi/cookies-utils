@@ -11,8 +11,8 @@ describe('CookieError', () => {
   it('is named CookieError and is an Error', () => {
     const error = new CookieError('UNSUPPORTED', 'nope');
     expect(error.name).toBe('CookieError');
-    expect(error instanceof Error).toBe(true);
-    expect(error instanceof CookieError).toBe(true);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(CookieError);
   });
 
   it('preserves an original backend failure as cause', () => {

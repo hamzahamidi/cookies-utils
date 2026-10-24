@@ -20,6 +20,11 @@ export type { Cookie, CookieAttributes, DeleteOptions, SameSite } from './types'
 const DEFAULT_PATH = '/';
 const DEFAULT_SAME_SITE: SameSite = 'lax';
 
+function defaultWhenUndefined<T>(value: T | undefined, fallback: T): T {
+  if (value === undefined) return fallback;
+  return value;
+}
+
 /** Reads a cookie value, or undefined when it is not set. */
 export async function get(name: string): Promise<string | undefined> {
   validateName(name);
@@ -58,8 +63,8 @@ export async function set(
   const provided = options as CookieAttributes;
   const attributes = validate(name, value, {
     ...provided,
-    path: provided.path === undefined ? DEFAULT_PATH : provided.path,
-    sameSite: provided.sameSite === undefined ? DEFAULT_SAME_SITE : provided.sameSite,
+    path: defaultWhenUndefined(provided.path, DEFAULT_PATH),
+    sameSite: defaultWhenUndefined(provided.sameSite, DEFAULT_SAME_SITE),
   });
   await selectBackend().set(encode(name), encode(value), attributes);
 }
@@ -76,7 +81,7 @@ async function del(name: string, options: DeleteOptions = {}): Promise<void> {
   const provided = options as DeleteOptions;
   const scoped: DeleteOptions = {
     ...provided,
-    path: provided.path === undefined ? DEFAULT_PATH : provided.path,
+    path: defaultWhenUndefined(provided.path, DEFAULT_PATH),
   };
   validateScope(scoped);
   await selectBackend().delete(encode(name), scoped);

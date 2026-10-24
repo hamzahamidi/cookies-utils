@@ -38,8 +38,8 @@ export function createDocumentCookieBackend(target: CookieTarget): Backend {
     },
 
     set(name: string, value: string, attributes: NormalizedAttributes): Promise<void> {
-      const cookie = serialize(name, value, attributes);
       return promiseResult(() => {
+        const cookie = serialize(name, value, attributes);
         try {
           target.cookie = cookie;
         } catch (cause) {
@@ -49,13 +49,13 @@ export function createDocumentCookieBackend(target: CookieTarget): Backend {
     },
 
     delete(name: string, options: DeleteOptions): Promise<void> {
-      const attributes: NormalizedAttributes = { ...options, maxAge: 0, expires: 0 };
-      // CHIPS requires a Partitioned cookie to be Secure, so a browser discards a
-      // write carrying Partitioned without it. Deletion works by overwriting with
-      // an expired cookie, so a discarded write leaves the cookie in place.
-      if (options.partitioned === true) attributes.secure = true;
-      const cookie = serialize(name, '', attributes);
       return promiseResult(() => {
+        const attributes: NormalizedAttributes = { ...options, maxAge: 0, expires: 0 };
+        // CHIPS requires a Partitioned cookie to be Secure, so a browser discards a
+        // write carrying Partitioned without it. Deletion works by overwriting with
+        // an expired cookie, so a discarded write leaves the cookie in place.
+        if (options.partitioned === true) attributes.secure = true;
+        const cookie = serialize(name, '', attributes);
         try {
           target.cookie = cookie;
         } catch (cause) {

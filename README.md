@@ -5,7 +5,7 @@
         <img src="https://img.shields.io/npm/v/cookies-utils.svg?style=flat-square&colorB=51C838" alt="NPM Version">
     </a>
     <a href="https://sonarcloud.io/summary/new_code?id=hamzahamidi_cookies-utils">
-        <img src="https://sonarcloud.io/api/project_badges/measure?project=hamzahamidi_cookies-utils&metric=coverage" alt="SonarQube Cloud coverage">
+        <img src="https://sonarcloud.io/api/project_badges/measure?project=hamzahamidi_cookies-utils&metric=coverage" alt="Coverage measured by SonarQube Cloud">
     </a>
     <a href="https://github.com/hamzahamidi/cookies-utils/actions?query=workflow%3ABuild">
         <img src="https://github.com/hamzahamidi/cookies-utils/workflows/Build/badge.svg" alt="Build Status">

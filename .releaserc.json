@@ -9,6 +9,11 @@
                 "preset": "angular",
                 "releaseRules": [
                     {
+                        "type": "build",
+                        "scope": "deps-dev",
+                        "release": "patch"
+                    },
+                    {
                         "type": "docs",
                         "scope": "readme",
                         "release": "patch"

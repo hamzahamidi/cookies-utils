@@ -23,6 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -36,21 +37,11 @@ jobs:
         run: npm run check:bundle
       - run: npm run coverage
       - run: npm run smoke
-      - name: Upload coverage
-        # Forked pull requests receive no secrets, so CODECOV_TOKEN is absent
-        # and the upload would fail every outside contribution. A push event
-        # has no pull_request context at all, so the fork check treats a
-        # missing value as "not a fork" rather than skipping main too.
-        # Dependabot pull requests also run without repository secrets.
-        if: >-
-          matrix.node-version == '22.x' &&
-          github.event.pull_request.head.repo.fork != true &&
-          github.actor != 'dependabot[bot]'
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          fail_ci_if_error: true
+      - name: Analyze with SonarQube Cloud
+        if: matrix.node-version == '22.x' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   browser:
     runs-on: ubuntu-latest

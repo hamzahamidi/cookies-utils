@@ -9,7 +9,7 @@ export interface CookieTarget {
 }
 
 function promiseResult<T>(operation: () => T): Promise<T> {
-  return new Promise((resolve) => resolve(operation()));
+  return Promise.resolve().then(operation);
 }
 
 /**
